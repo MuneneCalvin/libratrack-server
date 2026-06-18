@@ -2,6 +2,7 @@ from django.urls import path
 from apps.reports.views import (
     SummaryReportView, BorrowingReportView, InventoryReportView,
     FinesReportView, OverdueReportView, PopularBooksReportView,
+    MembersReportView, ExportReportView,
 )
 
 urlpatterns = [
@@ -11,4 +12,6 @@ urlpatterns = [
     path('fines/', FinesReportView.as_view(), name='report-fines'),
     path('overdue/', OverdueReportView.as_view(), name='report-overdue'),
     path('popular-books/', PopularBooksReportView.as_view(), name='report-popular'),
+    path('members/', MembersReportView.as_view(), name='report-members'),
+    path('export', ExportReportView.as_view(), name='report-export'),
 ]

@@ -68,6 +68,14 @@ def test_waive_fine_admin(admin_client, fine):
 
 
 @pytest.mark.django_db
+def test_waive_fine_accepts_frontend_note_field(admin_client, fine):
+    resp = admin_client.patch(f'/api/fines/{fine.id}/waive/', {'note': 'Frontend note'}, format='json')
+    assert resp.status_code == 200
+    assert resp.json()['data']['isWaived'] is True
+    assert resp.json()['data']['waivedNote'] == 'Frontend note'
+
+
+@pytest.mark.django_db
 def test_waive_fine_librarian_forbidden(librarian_client, fine):
     resp = librarian_client.patch(f'/api/fines/{fine.id}/waive/')
     assert resp.status_code == 403

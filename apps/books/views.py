@@ -21,6 +21,7 @@ class BookListCreateView(generics.ListCreateAPIView):
         qs = Book.objects.select_related('category').order_by('-created_at')
         search = self.request.query_params.get('q') or self.request.query_params.get('search')
         category = self.request.query_params.get('category')
+        available = self.request.query_params.get('available')
         if search:
             qs = qs.filter(
                 db_models.Q(title__icontains=search)
@@ -29,6 +30,11 @@ class BookListCreateView(generics.ListCreateAPIView):
             )
         if category:
             qs = qs.filter(category_id=category)
+        if available is not None:
+            if available.lower() in ('true', '1', 'yes'):
+                qs = qs.filter(available_copies__gt=0)
+            elif available.lower() in ('false', '0', 'no'):
+                qs = qs.filter(available_copies=0)
         return qs
 
 
