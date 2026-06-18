@@ -34,6 +34,14 @@ def test_update_settings_admin(admin_client, default_settings):
 
 
 @pytest.mark.django_db
+def test_patch_settings_admin(admin_client, default_settings):
+    resp = admin_client.patch('/api/settings/', {'fine_rate_per_day': '12'}, format='json')
+    assert resp.status_code == 200
+    assert resp.json()['data']['fine_rate_per_day'] == '12'
+    assert AppSetting.objects.get(key='fine_rate_per_day').value == '12'
+
+
+@pytest.mark.django_db
 def test_update_settings_member_forbidden(member_client, default_settings):
     resp = member_client.put('/api/settings/', {'fine_rate_per_day': '99'}, format='json')
     assert resp.status_code == 403

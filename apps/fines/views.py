@@ -49,6 +49,6 @@ class FineWaiveView(APIView):
         fine = get_object_or_404(Fine.objects.select_related('member'), id=pk)
         fine.is_waived = True
         fine.waived_by = request.user
-        fine.waived_note = request.data.get('waivedNote') or None
+        fine.waived_note = request.data.get('waivedNote') or request.data.get('note') or None
         fine.save(update_fields=['is_waived', 'waived_by_id', 'waived_note'])
         return Response(FineSerializer(fine).data)

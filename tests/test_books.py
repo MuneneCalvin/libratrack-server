@@ -39,6 +39,21 @@ def test_filter_books_by_category(admin_client, book, category):
 
 
 @pytest.mark.django_db
+def test_filter_books_by_available_true(admin_client, book, category):
+    Book.objects.create(
+        title='Unavailable Book',
+        author='Test Author',
+        isbn='978-0000000002',
+        category=category,
+        total_copies=1,
+        available_copies=0,
+    )
+    resp = admin_client.get('/api/books/?available=true')
+    assert resp.status_code == 200
+    assert [item['title'] for item in resp.json()['data']] == ['Test Book']
+
+
+@pytest.mark.django_db
 def test_create_book_admin(admin_client, category):
     payload = {
         'title': 'Clean Code', 'author': 'Robert C. Martin',
