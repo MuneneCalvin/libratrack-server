@@ -1,6 +1,7 @@
 import pytest
 from rest_framework.test import APIClient
 from apps.auth_app.models import Role, User
+from apps.members.models import Member
 
 
 @pytest.fixture
@@ -88,3 +89,43 @@ def test_logout_returns_200(client, admin_user):
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
     resp = client.post('/api/auth/logout')
     assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_public_signup_creates_active_member_and_logs_them_in(client, roles):
+    payload = {
+        'email': 'new.member@test.com',
+        'password': 'Member@1234',
+        'fullName': 'New Public Member',
+        'phone': '+254700000001',
+        'address': 'Nairobi',
+    }
+
+    resp = client.post('/api/auth/signup', payload, format='json')
+
+    assert resp.status_code == 201
+    body = resp.json()['data']
+    assert 'accessToken' in body
+    assert body['user']['email'] == 'new.member@test.com'
+    assert body['user']['role'] == 'member'
+    assert body['user']['mustChangePassword'] is False
+    assert body['user']['memberId']
+    assert 'refreshToken' in resp.cookies
+
+    user = User.objects.get(email='new.member@test.com')
+    member = Member.objects.get(user=user)
+    assert user.is_active is True
+    assert user.must_change_password is False
+    assert member.full_name == 'New Public Member'
+    assert member.membership_number.startswith('MEM-')
+
+
+@pytest.mark.django_db
+def test_public_signup_rejects_duplicate_email(client, roles, admin_user):
+    resp = client.post('/api/auth/signup', {
+        'email': admin_user.email,
+        'password': 'Member@1234',
+        'fullName': 'Duplicate Member',
+    }, format='json')
+
+    assert resp.status_code == 400
