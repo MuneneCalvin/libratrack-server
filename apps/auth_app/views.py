@@ -4,10 +4,17 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework import status
 
 from apps.auth_app.models import User, RefreshToken
 from apps.auth_app.tokens import generate_access_token, generate_refresh_token, verify_refresh_token
-from apps.auth_app.serializers import UserSerializer
+from apps.auth_app.serializers import PublicSignupSerializer, UserSerializer
+
+
+def attach_refresh_cookie(response, refresh_value):
+    response.set_cookie('refreshToken', refresh_value, httponly=True, samesite='Lax',
+                        max_age=7 * 24 * 60 * 60, secure=False)
+    return response
 
 
 class LoginView(APIView):
@@ -32,9 +39,30 @@ class LoginView(APIView):
             expires_at=timezone.now() + timedelta(days=7),
         )
         response = Response({'accessToken': access_token})
-        response.set_cookie('refreshToken', refresh_value, httponly=True, samesite='Lax',
-                            max_age=7 * 24 * 60 * 60, secure=False)
-        return response
+        return attach_refresh_cookie(response, refresh_value)
+
+
+class SignupView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        serializer = PublicSignupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        member = serializer.save()
+        user = member.user
+        access_token = generate_access_token(user)
+        refresh_value, refresh_hash = generate_refresh_token()
+        RefreshToken.objects.create(
+            user=user,
+            token_hash=refresh_hash,
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+        response = Response({
+            'accessToken': access_token,
+            'user': UserSerializer(user).data,
+        }, status=status.HTTP_201_CREATED)
+        return attach_refresh_cookie(response, refresh_value)
 
 
 class LogoutView(APIView):
@@ -78,9 +106,7 @@ class RefreshView(APIView):
                                     expires_at=timezone.now() + timedelta(days=7))
         access_token = generate_access_token(user)
         response = Response({'accessToken': access_token})
-        response.set_cookie('refreshToken', new_value, httponly=True, samesite='Lax',
-                            max_age=7 * 24 * 60 * 60, secure=False)
-        return response
+        return attach_refresh_cookie(response, new_value)
 
 
 class MeView(APIView):
