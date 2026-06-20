@@ -112,6 +112,20 @@ python manage.py flush --no-input
 python seed.py
 ```
 
+### Import a larger demo catalog
+
+After seeding users, settings, members, and example transactions, import a richer
+Open Library catalog:
+
+```bash
+python manage.py import_openlibrary_books --limit 500 --copies 50
+```
+
+The importer stores Open Library metadata in the local `books` table, uses remote
+cover URLs when available, skips duplicate ISBNs, and sets each imported book to
+50 total copies and 50 available copies. Normal app browsing still uses
+`/api/books/`; Open Library is not called by the frontend.
+
 ### 7. Start the development server
 
 ```bash

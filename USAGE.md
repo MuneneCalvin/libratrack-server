@@ -167,6 +167,25 @@ curl -X DELETE http://localhost:8000/api/books/1/ \
   -H "Authorization: Bearer <TOKEN>"
 ```
 
+### Import books from Open Library
+
+Run this from the backend project root:
+
+```bash
+python manage.py import_openlibrary_books --limit 500 --copies 50
+```
+
+Options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--limit` | `500` | Maximum number of valid new books to import. |
+| `--copies` | `50` | Value used for both `total_copies` and `available_copies`. |
+
+The command imports local `Book` records, creates missing categories, stores
+`cover_url` when Open Library metadata supports it, skips duplicate ISBNs, and
+prints imported, duplicate, invalid, and category-created counts.
+
 ---
 
 ## Members
