@@ -1,4 +1,5 @@
 from datetime import timedelta
+from django.db.models import Q
 from django.db import transaction as db_tx
 from django.utils import timezone
 from rest_framework import status
@@ -22,10 +23,21 @@ class TransactionListCreateView(APIView):
         qs = BorrowTransaction.objects.select_related('member').prefetch_related('items__book').order_by('-borrowed_at')
         status_filter = request.query_params.get('status')
         member_id = request.query_params.get('memberId')
+        book_id = request.query_params.get('bookId')
+        q = request.query_params.get('q')
         if status_filter:
             qs = qs.filter(status=status_filter)
         if member_id:
             qs = qs.filter(member_id=member_id)
+        if book_id:
+            qs = qs.filter(items__book_id=book_id)
+        if q:
+            qs = qs.filter(
+                Q(member__full_name__icontains=q)
+                | Q(items__book__title__icontains=q)
+                | Q(items__book__author__icontains=q)
+            )
+        qs = qs.distinct()
         paginator = StandardPagination()
         page = paginator.paginate_queryset(qs, request)
         return paginator.get_paginated_response(BorrowTransactionSerializer(page, many=True).data)
@@ -40,10 +52,23 @@ class TransactionListCreateView(APIView):
         max_books = int(AppSetting.objects.get(key='max_books_per_member').value)
         member = get_object_or_404(Member, id=member_id)
 
-        active_count = BorrowTransaction.objects.filter(member=member, status='ACTIVE').count()
+        active_count = TransactionItem.objects.filter(
+            transaction__member=member,
+            transaction__status__in=['ACTIVE', 'OVERDUE'],
+            returned_at__isnull=True,
+        ).count()
         if active_count + len(book_ids) > max_books:
+            remaining_slots = max(max_books - active_count, 0)
             return Response(
-                {'detail': f'Member cannot borrow more than {max_books} books at once'},
+                {
+                    'detail': (
+                        f'Member already has {active_count} unreturned book(s). '
+                        f'The current limit is {max_books}, so they can borrow {remaining_slots} more.'
+                    ),
+                    'activeBorrowCount': active_count,
+                    'maxBooks': max_books,
+                    'remainingSlots': remaining_slots,
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -80,21 +105,35 @@ class TransactionReturnView(APIView):
 
     def post(self, request, pk):
         tx = get_object_or_404(BorrowTransaction.objects.prefetch_related('items__book'), id=pk)
-        if tx.status == 'RETURNED':
+        unreturned_items = tx.items.filter(returned_at__isnull=True)
+        if tx.status == 'RETURNED' or not unreturned_items.exists():
             return Response({'detail': 'Transaction already returned'}, status=status.HTTP_400_BAD_REQUEST)
+
+        item_ids = request.data.get('itemIds')
+        if item_ids is not None:
+            if not isinstance(item_ids, list) or not item_ids:
+                return Response({'detail': 'itemIds must be a non-empty list'}, status=status.HTTP_400_BAD_REQUEST)
+            unreturned_items = unreturned_items.filter(id__in=item_ids)
+            if unreturned_items.count() != len(set(item_ids)):
+                return Response(
+                    {'detail': 'One or more selected books are not returnable for this transaction'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         fine_rate = float(AppSetting.objects.get(key='fine_rate_per_day').value)
         now = timezone.now()
 
         with db_tx.atomic():
-            tx.returned_at = now
-            tx.status = 'RETURNED'
-            tx.save()
-            for item in tx.items.all():
+            for item in unreturned_items:
                 item.returned_at = now
                 item.save()
                 item.book.available_copies += 1
                 item.book.save()
+
+            if not tx.items.filter(returned_at__isnull=True).exists():
+                tx.returned_at = now
+                tx.status = 'RETURNED'
+                tx.save(update_fields=['returned_at', 'status'])
 
             if now > tx.due_date:
                 from apps.fines.models import Fine

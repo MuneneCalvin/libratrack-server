@@ -18,9 +18,16 @@ class EnvelopeRenderer(JSONRenderer):
                 message = data.get('detail', data.get('message', str(data)))
                 if not isinstance(message, str):
                     message = str(message)
+                extra_fields = {
+                    key: value
+                    for key, value in data.items()
+                    if key not in ('detail', 'message')
+                }
             else:
                 message = str(data) if data else 'An error occurred'
+                extra_fields = {}
             envelope = {'status': 'error', 'message': message}
+            envelope.update(extra_fields)
         elif isinstance(data, dict) and 'results' in data:
             envelope = {
                 'status': 'success',

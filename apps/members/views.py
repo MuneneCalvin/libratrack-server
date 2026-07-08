@@ -3,9 +3,12 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError
+from django.db import transaction
 
 from apps.members.models import Member
 from apps.members.serializers import MemberSerializer, CreateMemberSerializer
+from apps.auth_app.models import User
 from apps.auth_app.permissions import IsAdmin, IsAdminOrLibrarian, IsSelfOrAdminOrLibrarian
 from shared.pagination import StandardPagination
 
@@ -39,7 +42,7 @@ class MemberDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method == 'DELETE':
             return [IsAdmin()]
         if self.request.method in ('PUT', 'PATCH'):
-            return [IsAdminOrLibrarian()]
+            return [IsSelfOrAdminOrLibrarian()]
         return [IsSelfOrAdminOrLibrarian()]
 
     def get_object(self):
@@ -53,12 +56,40 @@ class MemberDetailView(generics.RetrieveUpdateDestroyAPIView):
         member.full_name = data.get('fullName', member.full_name)
         member.phone = data.get('phone', member.phone)
         member.address = data.get('address', member.address)
-        member.membership_number = data.get('membershipNumber', member.membership_number)
+        if 'email' in data:
+            email = str(data.get('email', '')).strip().lower()
+            if not email:
+                raise ValidationError({'email': 'Email is required.'})
+            if User.objects.filter(email__iexact=email).exclude(pk=member.user_id).exists():
+                raise ValidationError({'email': 'A user with this email already exists.'})
+            member.user.email = email
+            member.user.save(update_fields=['email'])
+        if request.user.role.name in ('admin', 'librarian'):
+            member.membership_number = data.get('membershipNumber', member.membership_number)
+            if 'isActive' in data:
+                member.user.is_active = bool(data['isActive'])
+                member.user.save(update_fields=['is_active'])
         member.save()
-        if 'isActive' in data:
-            member.user.is_active = bool(data['isActive'])
-            member.user.save()
         return Response(MemberSerializer(member).data)
+
+    def destroy(self, request, *args, **kwargs):
+        member = self.get_object()
+        user = member.user
+
+        with transaction.atomic():
+            # A permanent member delete should remove dependent account activity first;
+            # otherwise PROTECT relationships on fines/reservations/borrows surface as 500s.
+            from apps.fines.models import Fine
+            from apps.reservations.models import Reservation
+            from apps.transactions.models import BorrowTransaction
+
+            Fine.objects.filter(member=member).delete()
+            Reservation.objects.filter(member=member).delete()
+            BorrowTransaction.objects.filter(member=member).delete()
+            member.delete()
+            user.delete()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class MemberTransactionsView(APIView):

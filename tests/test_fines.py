@@ -90,6 +90,25 @@ def test_filter_fines_by_member(admin_client, fine, member):
 
 
 @pytest.mark.django_db
+def test_filter_fines_by_status(admin_client, fine):
+    paid_resp = admin_client.get('/api/fines/?status=PAID')
+    unpaid_resp = admin_client.get('/api/fines/?status=UNPAID')
+
+    assert paid_resp.status_code == 200
+    assert unpaid_resp.status_code == 200
+    assert all(f['isPaid'] for f in paid_resp.json()['data'])
+    assert any(f['id'] == fine.id for f in unpaid_resp.json()['data'])
+
+
+@pytest.mark.django_db
+def test_search_fines_by_member(admin_client, fine):
+    resp = admin_client.get('/api/fines/?q=Test%20Member')
+
+    assert resp.status_code == 200
+    assert any(f['id'] == fine.id for f in resp.json()['data'])
+
+
+@pytest.mark.django_db
 def test_get_nonexistent_fine(admin_client):
     resp = admin_client.get('/api/fines/9999/')
     assert resp.status_code == 404

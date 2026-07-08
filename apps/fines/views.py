@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.generics import get_object_or_404
+from django.db.models import Q
 
 from apps.fines.models import Fine
 from apps.fines.serializers import FineSerializer
@@ -15,9 +16,21 @@ class FineListView(APIView):
         qs = Fine.objects.select_related('member').order_by('-created_at')
         member_id = request.query_params.get('memberId')
         is_paid = request.query_params.get('isPaid')
+        status_filter = request.query_params.get('status')
+        q = request.query_params.get('q')
         if member_id:
             qs = qs.filter(member_id=member_id)
-        if is_paid is not None:
+        if q:
+            qs = qs.filter(Q(member__full_name__icontains=q) | Q(reason__icontains=q))
+        if status_filter:
+            status_value = status_filter.upper()
+            if status_value == 'PAID':
+                qs = qs.filter(is_paid=True)
+            elif status_value == 'UNPAID':
+                qs = qs.filter(is_paid=False, is_waived=False)
+            elif status_value == 'WAIVED':
+                qs = qs.filter(is_waived=True)
+        elif is_paid is not None:
             qs = qs.filter(is_paid=is_paid.lower() == 'true')
         paginator = StandardPagination()
         page = paginator.paginate_queryset(qs, request)
