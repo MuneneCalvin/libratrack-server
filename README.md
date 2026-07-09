@@ -189,6 +189,7 @@ All endpoints are prefixed with `/api/`. Every response is wrapped in an envelop
 | Method | Endpoint | Auth required | Description |
 |---|---|---|---|
 | POST | `/api/auth/login` | No | Exchange credentials for tokens |
+| POST | `/api/auth/signup` | No | Public member self-registration; issues tokens on success |
 | POST | `/api/auth/logout` | Yes | Revoke refresh token |
 | POST | `/api/auth/refresh` | No | Renew access token via cookie |
 | GET | `/api/auth/me` | Yes | Return current user profile |
@@ -248,6 +249,7 @@ All endpoints are prefixed with `/api/`. Every response is wrapped in an envelop
 |---|---|---|
 | GET | `/api/fines/` | List all fines |
 | PATCH | `/api/fines/{id}/pay/` | Mark a fine as paid |
+| PATCH | `/api/fines/{id}/waive/` | Waive a fine (admin/librarian only; accepts optional `note`) |
 
 ### Reports
 
@@ -311,6 +313,14 @@ pytest tests/test_transactions.py -v
 ```
 
 The test suite uses an in-memory SQLite database (configured in `libratrack/settings/test.py`) so no MySQL instance is required for testing.
+
+---
+
+## Management Commands
+
+| Command | Description |
+|---|---|
+| `python manage.py mark_overdue` | Marks all `ACTIVE` borrow transactions past their due date as `OVERDUE`. Run on a schedule (e.g. nightly cron) to keep transaction statuses accurate. |
 
 ---
 
