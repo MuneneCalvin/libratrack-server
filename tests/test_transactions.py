@@ -41,6 +41,32 @@ def test_create_borrow_admin(admin_client, member, book, settings_data):
 
 
 @pytest.mark.django_db
+def test_create_borrow_returns_capacity_metadata_when_member_is_at_limit(admin_client, member, book, category, settings_data):
+    from apps.books.models import Book
+
+    tx = BorrowTransaction.objects.create(member=member, due_date=timezone.now() + timedelta(days=14), status='ACTIVE')
+    for index in range(5):
+        borrowed_book = Book.objects.create(
+            title=f'Borrowed Book {index}',
+            author='Test Author',
+            isbn=f'978-100000000{index}',
+            category=category,
+            total_copies=1,
+            available_copies=0,
+        )
+        TransactionItem.objects.create(transaction=tx, book=borrowed_book)
+
+    resp = admin_client.post('/api/transactions/', {'memberId': member.id, 'bookIds': [book.id]}, format='json')
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data['status'] == 'error'
+    assert data['activeBorrowCount'] == 5
+    assert data['maxBooks'] == 5
+    assert data['remainingSlots'] == 0
+
+
+@pytest.mark.django_db
 def test_create_borrow_unavailable_book(admin_client, member, book, settings_data):
     book.available_copies = 0
     book.save()
@@ -68,6 +94,34 @@ def test_return_book(admin_client, member, book, settings_data):
     assert resp.json()['data']['status'] == 'RETURNED'
     book.refresh_from_db()
     assert book.available_copies == 3
+
+
+@pytest.mark.django_db
+def test_return_selected_transaction_items(admin_client, member, book, category, settings_data):
+    from apps.books.models import Book
+
+    second_book = Book.objects.create(
+        title='Second Book',
+        author='Second Author',
+        isbn='978-0000000002',
+        category=category,
+        total_copies=2,
+        available_copies=2,
+    )
+    borrow = admin_client.post('/api/transactions/', {'memberId': member.id, 'bookIds': [book.id, second_book.id]}, format='json')
+    tx_id = borrow.json()['data']['id']
+    first_item_id = borrow.json()['data']['items'][0]['id']
+
+    resp = admin_client.post(f'/api/transactions/{tx_id}/return/', {'itemIds': [first_item_id]}, format='json')
+
+    assert resp.status_code == 200
+    assert resp.json()['data']['status'] == 'ACTIVE'
+    returned_items = [item for item in resp.json()['data']['items'] if item['returnedAt']]
+    assert [item['id'] for item in returned_items] == [first_item_id]
+    book.refresh_from_db()
+    second_book.refresh_from_db()
+    assert book.available_copies == 3
+    assert second_book.available_copies == 1
 
 
 @pytest.mark.django_db
@@ -101,6 +155,29 @@ def test_filter_transactions_by_status(admin_client, member, book, settings_data
     assert resp.status_code == 200
     for tx in resp.json()['data']:
         assert tx['status'] == 'ACTIVE'
+
+
+@pytest.mark.django_db
+def test_filter_transactions_by_book(admin_client, member, book, settings_data):
+    admin_client.post('/api/transactions/', {'memberId': member.id, 'bookIds': [book.id]}, format='json')
+    resp = admin_client.get(f'/api/transactions/?bookId={book.id}')
+    assert resp.status_code == 200
+    assert resp.json()['data']
+    for tx in resp.json()['data']:
+        assert any(item['book']['id'] == book.id for item in tx['items'])
+
+
+@pytest.mark.django_db
+def test_search_transactions_by_member_or_book(admin_client, member, book, settings_data):
+    admin_client.post('/api/transactions/', {'memberId': member.id, 'bookIds': [book.id]}, format='json')
+
+    member_resp = admin_client.get('/api/transactions/?q=Test%20Member')
+    book_resp = admin_client.get('/api/transactions/?q=Test%20Book')
+
+    assert member_resp.status_code == 200
+    assert book_resp.status_code == 200
+    assert member_resp.json()['data']
+    assert book_resp.json()['data']
 
 
 @pytest.mark.django_db

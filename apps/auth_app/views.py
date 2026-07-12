@@ -2,7 +2,7 @@ from django.utils import timezone
 from datetime import timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status
 
@@ -113,6 +113,18 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        return Response(UserSerializer(request.user).data)
+
+    def patch(self, request):
+        email = request.data.get('email')
+        if email is not None:
+            email = str(email).strip().lower()
+            if not email:
+                raise ValidationError({'email': 'Email is required.'})
+            if User.objects.filter(email__iexact=email).exclude(pk=request.user.pk).exists():
+                raise ValidationError({'email': 'A user with this email already exists.'})
+            request.user.email = email
+            request.user.save(update_fields=['email'])
         return Response(UserSerializer(request.user).data)
 
 

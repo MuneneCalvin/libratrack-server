@@ -181,10 +181,13 @@ Options:
 | --- | --- | --- |
 | `--limit` | `500` | Maximum number of valid new books to import. |
 | `--copies` | `50` | Value used for both `total_copies` and `available_copies`. |
+| `--skip-work-details` | off | Skip per-work detail requests for faster imports without synopsis enrichment. |
 
 The command imports local `Book` records, creates missing categories, stores
-`cover_url` when Open Library metadata supports it, skips duplicate ISBNs, and
-prints imported, duplicate, invalid, and category-created counts.
+`cover_url`, synopsis, subjects/tags, language codes, edition counts, ratings,
+and popularity counts when Open Library metadata supports them, skips duplicate
+ISBNs, and prints imported, duplicate, invalid, category-created, and work-detail
+failure counts.
 
 ---
 

@@ -54,6 +54,48 @@ def test_filter_books_by_available_true(admin_client, book, category):
 
 
 @pytest.mark.django_db
+def test_sort_books_by_rating(admin_client, book, category):
+    book.rating_average = 3.0
+    book.rating_count = 3
+    book.save()
+    Book.objects.create(
+        title='Highly Rated',
+        author='Test Author',
+        isbn='978-0000000003',
+        category=category,
+        total_copies=1,
+        available_copies=1,
+        rating_average=4.8,
+        rating_count=10,
+    )
+
+    resp = admin_client.get('/api/books/?sort=rating')
+
+    assert resp.status_code == 200
+    assert resp.json()['data'][0]['title'] == 'Highly Rated'
+
+
+@pytest.mark.django_db
+def test_sort_books_by_most_read(admin_client, book, category):
+    book.already_read_count = 2
+    book.save()
+    Book.objects.create(
+        title='Most Read',
+        author='Test Author',
+        isbn='978-0000000004',
+        category=category,
+        total_copies=1,
+        available_copies=1,
+        already_read_count=50,
+    )
+
+    resp = admin_client.get('/api/books/?sort=most_read')
+
+    assert resp.status_code == 200
+    assert resp.json()['data'][0]['title'] == 'Most Read'
+
+
+@pytest.mark.django_db
 def test_create_book_admin(admin_client, category):
     payload = {
         'title': 'Clean Code', 'author': 'Robert C. Martin',
@@ -74,9 +116,32 @@ def test_create_book_member_forbidden(member_client, category):
 
 @pytest.mark.django_db
 def test_get_book_detail(admin_client, book):
+    book.openlibrary_work_key = '/works/OL1W'
+    book.synopsis = 'A short synopsis.'
+    book.subjects = ['Software', 'Testing']
+    book.language_codes = ['eng', 'spa']
+    book.edition_count = 4
+    book.rating_average = 4.5
+    book.rating_count = 10
+    book.want_to_read_count = 20
+    book.currently_reading_count = 3
+    book.already_read_count = 7
+    book.save()
+
     resp = admin_client.get(f'/api/books/{book.id}/')
     assert resp.status_code == 200
-    assert resp.json()['data']['id'] == book.id
+    data = resp.json()['data']
+    assert data['id'] == book.id
+    assert data['openLibraryWorkKey'] == '/works/OL1W'
+    assert data['synopsis'] == 'A short synopsis.'
+    assert data['subjects'] == ['Software', 'Testing']
+    assert data['languageCodes'] == ['eng', 'spa']
+    assert data['editionCount'] == 4
+    assert data['ratingAverage'] == 4.5
+    assert data['ratingCount'] == 10
+    assert data['wantToReadCount'] == 20
+    assert data['currentlyReadingCount'] == 3
+    assert data['alreadyReadCount'] == 7
 
 
 @pytest.mark.django_db

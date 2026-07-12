@@ -20,8 +20,16 @@ class SummaryReportView(APIView):
 
     def get(self, request):
         total_books = Book.objects.count()
+        book_copy_totals = Book.objects.aggregate(
+            total_copies=Sum('total_copies'),
+            available_copies=Sum('available_copies'),
+        )
         total_members = Member.objects.count()
         active_borrows = BorrowTransaction.objects.filter(status='ACTIVE').count()
+        borrowed_books = TransactionItem.objects.filter(
+            transaction__status='ACTIVE',
+            returned_at__isnull=True,
+        ).count()
         overdue_count = BorrowTransaction.objects.filter(status='OVERDUE').count()
         pending_reservations = Reservation.objects.filter(status='PENDING').count()
         unpaid_fines_total = Fine.objects.filter(is_paid=False, is_waived=False).aggregate(
@@ -29,6 +37,11 @@ class SummaryReportView(APIView):
         )['total'] or 0
         return Response({
             'totalBooks': total_books,
+            'totalCopies': book_copy_totals['total_copies'] or 0,
+            'availableBooks': book_copy_totals['available_copies'] or 0,
+            'availableCopies': book_copy_totals['available_copies'] or 0,
+            'borrowedBooks': borrowed_books,
+            'reservedBooks': pending_reservations,
             'totalMembers': total_members,
             'activeBorrows': active_borrows,
             'overdueCount': overdue_count,

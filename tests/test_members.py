@@ -1,6 +1,11 @@
 import pytest
+from datetime import timedelta
+from django.utils import timezone
 from apps.auth_app.models import Role, User
 from apps.members.models import Member
+from apps.fines.models import Fine
+from apps.reservations.models import Reservation
+from apps.transactions.models import BorrowTransaction, TransactionItem
 
 
 @pytest.mark.django_db
@@ -64,9 +69,47 @@ def test_update_member_librarian(librarian_client, member):
 
 
 @pytest.mark.django_db
+def test_librarian_can_revoke_member_access(librarian_client, member):
+    resp = librarian_client.patch(f'/api/members/{member.id}/', {'isActive': False}, format='json')
+
+    assert resp.status_code == 200
+    member.user.refresh_from_db()
+    assert member.user.is_active is False
+    assert resp.json()['data']['isActive'] is False
+
+
+@pytest.mark.django_db
 def test_delete_member_admin(admin_client, member):
     resp = admin_client.delete(f'/api/members/{member.id}/')
     assert resp.status_code == 204
+
+
+@pytest.mark.django_db
+def test_delete_member_admin_removes_related_activity(admin_client, member, book):
+    transaction = BorrowTransaction.objects.create(
+        member=member,
+        due_date=timezone.now() + timedelta(days=7),
+        status='ACTIVE',
+    )
+    TransactionItem.objects.create(transaction=transaction, book=book)
+    Fine.objects.create(transaction=transaction, member=member, amount='25.00', reason='Overdue')
+    Reservation.objects.create(
+        member=member,
+        book=book,
+        expires_at=timezone.now() + timedelta(days=3),
+        status='PENDING',
+    )
+    member_id = member.id
+    user_id = member.user_id
+
+    resp = admin_client.delete(f'/api/members/{member_id}/')
+
+    assert resp.status_code == 204
+    assert not Member.objects.filter(id=member_id).exists()
+    assert not User.objects.filter(id=user_id).exists()
+    assert not BorrowTransaction.objects.filter(id=transaction.id).exists()
+    assert not Fine.objects.filter(member_id=member_id).exists()
+    assert not Reservation.objects.filter(member_id=member_id).exists()
 
 
 @pytest.mark.django_db

@@ -5,10 +5,11 @@ from apps.books.serializers import BookSerializer
 
 class TransactionItemSerializer(serializers.ModelSerializer):
     book = BookSerializer(read_only=True)
+    returnedAt = serializers.DateTimeField(source='returned_at', read_only=True)
 
     class Meta:
         model = TransactionItem
-        fields = ['id', 'book', 'returned_at']
+        fields = ['id', 'book', 'returnedAt']
 
 
 class BorrowTransactionSerializer(serializers.ModelSerializer):

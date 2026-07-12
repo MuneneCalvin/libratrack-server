@@ -45,6 +45,72 @@ def test_import_command_creates_books_with_default_copy_count(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_import_command_enriches_books_with_work_metadata(monkeypatch):
+    doc = make_doc('Enriched Book', '9780000000111')
+    doc.update(
+        {
+            'key': '/works/OL111W',
+            'subject': ['Search Subject'],
+            'language': ['eng', 'fre'],
+            'edition_count': 7,
+            'ratings_average': 4.25,
+            'ratings_count': 12,
+            'want_to_read_count': 30,
+            'currently_reading_count': 4,
+            'already_read_count': 8,
+        }
+    )
+
+    def fake_fetch(query, page=1, limit=100, timeout=10):
+        return [doc] if query == 'fiction' and page == 1 else []
+
+    def fake_fetch_work(work_key):
+        assert work_key == '/works/OL111W'
+        return {
+            'description': 'A useful synopsis for members.',
+            'subjects': ['Work Subject', 'Search Subject'],
+        }
+
+    monkeypatch.setattr(command_module, 'fetch_openlibrary_docs', fake_fetch)
+    monkeypatch.setattr(command_module, 'fetch_openlibrary_work', fake_fetch_work)
+
+    call_command('import_openlibrary_books', limit=1, copies=50)
+
+    book = Book.objects.get(isbn='9780000000111')
+    assert book.openlibrary_work_key == '/works/OL111W'
+    assert book.synopsis == 'A useful synopsis for members.'
+    assert book.subjects == ['Search Subject', 'Work Subject']
+    assert book.language_codes == ['eng', 'fre']
+    assert book.edition_count == 7
+    assert book.rating_average == 4.25
+    assert book.rating_count == 12
+    assert book.want_to_read_count == 30
+    assert book.currently_reading_count == 4
+    assert book.already_read_count == 8
+
+
+@pytest.mark.django_db
+def test_import_command_can_skip_work_detail_requests(monkeypatch):
+    doc = make_doc('Fast Import', '9780000000112')
+    doc['key'] = '/works/OL112W'
+
+    def fake_fetch(query, page=1, limit=100, timeout=10):
+        return [doc] if query == 'fiction' and page == 1 else []
+
+    def fail_fetch_work(work_key):
+        raise AssertionError('work details should not be fetched')
+
+    monkeypatch.setattr(command_module, 'fetch_openlibrary_docs', fake_fetch)
+    monkeypatch.setattr(command_module, 'fetch_openlibrary_work', fail_fetch_work)
+
+    call_command('import_openlibrary_books', limit=1, copies=50, skip_work_details=True)
+
+    book = Book.objects.get(isbn='9780000000112')
+    assert book.openlibrary_work_key == '/works/OL112W'
+    assert book.synopsis is None
+
+
+@pytest.mark.django_db
 def test_import_command_skips_duplicate_isbns(monkeypatch):
     category = Category.objects.create(name='Fiction')
     Book.objects.create(

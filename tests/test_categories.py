@@ -1,4 +1,5 @@
 import pytest
+from apps.categories.models import Category
 
 
 @pytest.mark.django_db
@@ -6,6 +7,18 @@ def test_list_categories_authenticated(admin_client):
     resp = admin_client.get('/api/categories/')
     assert resp.status_code == 200
     assert resp.json()['status'] == 'success'
+
+
+@pytest.mark.django_db
+def test_list_categories_with_books_filter(admin_client, category, book):
+    Category.objects.create(name='Empty Shelf')
+
+    resp = admin_client.get('/api/categories/?withBooks=true&limit=100')
+
+    assert resp.status_code == 200
+    items = resp.json()['data']
+    assert [item['name'] for item in items] == [category.name]
+    assert items[0]['bookCount'] == 1
 
 
 @pytest.mark.django_db

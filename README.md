@@ -1,6 +1,31 @@
-# Book Tracking System — Backend
+# LibraTrack - Backend
 
-A RESTful API server for the Book Tracking System. Built with Django and Django REST Framework, it manages all library data — books, members, transactions, reservations, fines, and notifications — and exposes a consistent JSON API consumed by the frontend.
+LibraTrack Backend is a Django REST API for a library management platform. It
+stores and serves the data used by the React frontend: users, roles, books,
+members, borrowing transactions, reservations, fines, notifications, reports, and
+library settings.
+
+The backend is designed for a prototype-ready library system where staff can
+manage day-to-day circulation and members can browse, reserve, and manage their
+own account.
+
+---
+
+## Core Capabilities
+
+- Custom JWT authentication with HttpOnly refresh-token cookies.
+- Role-based access for admin, librarian, and member accounts.
+- Public member sign-up plus staff-created member accounts.
+- Centralized book catalog with copy counts and availability.
+- Open Library import for a larger demo catalog with covers, synopsis, subjects,
+  languages, ratings, editions, and popularity data.
+- Borrowing and return workflows, including multi-book transactions and partial
+  returns.
+- Borrowing limit enforcement through `max_books_per_member`.
+- Member revoke/restore support through account activation state.
+- Admin-only permanent member deletion with dependent activity cleanup.
+- Reservations, fines, notifications, reports, CSV exports, and configurable
+  library settings.
 
 ---
 
@@ -10,9 +35,9 @@ A RESTful API server for the Book Tracking System. Built with Django and Django 
 |---|---|
 | Framework | Django 4.2 |
 | API layer | Django REST Framework 3.15 |
-| Database | MySQL 8 (via PyMySQL) |
-| Authentication | Custom JWT (PyJWT) + bcrypt |
-| Config management | python-decouple |
+| Database | MySQL 8 via PyMySQL |
+| Authentication | Custom JWT with PyJWT and bcrypt |
+| Config | python-decouple |
 | CORS | django-cors-headers |
 | Testing | pytest + pytest-django |
 
@@ -20,20 +45,26 @@ A RESTful API server for the Book Tracking System. Built with Django and Django 
 
 ## Prerequisites
 
-- Python 3.11 or later
-- MySQL 8.0 or later
-- A running MySQL database with a user that has full privileges on the target schema
+- Python 3.11 or later.
+- MySQL 8.0 or later.
+- A MySQL database and user with privileges on that database.
+- Internet access only if you want to import books from Open Library.
 
 ---
 
-## Getting Started
+## Local Setup
 
 ### 1. Create and activate a virtual environment
 
 ```bash
 python -m venv venv
-source venv/bin/activate        # macOS / Linux
-venv\Scripts\activate           # Windows
+source venv/bin/activate
+```
+
+On Windows:
+
+```bash
+venv\Scripts\activate
 ```
 
 ### 2. Install dependencies
@@ -42,31 +73,46 @@ venv\Scripts\activate           # Windows
 pip install -r requirements.txt
 ```
 
-### 3. Configure environment
+If your MySQL account uses `caching_sha2_password` and PyMySQL reports that the
+`cryptography` package is required, install it in the same virtual environment:
 
-Copy the example file and fill in your values:
+```bash
+pip install cryptography
+```
+
+### 3. Configure environment
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+Example local `.env`:
 
 ```env
-SECRET_KEY=your-long-random-secret-key
+SECRET_KEY=dev-secret-key-change-in-production
 DEBUG=True
-DATABASE_NAME=book_tracking
-DATABASE_USER=your_db_user
-DATABASE_PASSWORD=your_db_password
+DATABASE_NAME=libratrack
+DATABASE_USER=libratrack_user
+DATABASE_PASSWORD=libratrack_pass
 DATABASE_HOST=localhost
 DATABASE_PORT=3306
 CORS_ALLOWED_ORIGINS=http://localhost:5173
+ALLOWED_HOSTS=localhost,127.0.0.1
 ```
 
-### 4. Create the MySQL database
+### 4. Create the local MySQL database
 
 ```sql
-CREATE DATABASE book_tracking CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE libratrack CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'libratrack_user'@'localhost' IDENTIFIED BY 'libratrack_pass';
+GRANT ALL PRIVILEGES ON libratrack.* TO 'libratrack_user'@'localhost';
+```
+
+If the user already exists, reset the password instead:
+
+```sql
+ALTER USER 'libratrack_user'@'localhost' IDENTIFIED BY 'libratrack_pass';
+GRANT ALL PRIVILEGES ON libratrack.* TO 'libratrack_user'@'localhost';
 ```
 
 ### 5. Run migrations
@@ -75,64 +121,94 @@ CREATE DATABASE book_tracking CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 python manage.py migrate
 ```
 
-### 6. Seed the database
+### 6. Seed baseline demo data
 
 ```bash
-python seed.py
+python manage.py seed
 ```
 
-This populates the database with everything needed to use the system immediately:
+The seed command creates the small demo dataset needed to log in and test the
+main workflows:
 
-| Data | Count | Details |
-|---|---|---|
+| Data | Count | Notes |
+|---|---:|---|
 | Roles | 3 | `admin`, `librarian`, `member` |
-| Staff accounts | 2 | Admin + Librarian (see credentials below) |
-| Member accounts | 12 | `alice` → `liam` @example.com |
-| Categories | 12 | Fiction, History, Fantasy, Sci-Fi, etc. |
-| Books | 32 | Real titles spread across all categories |
-| Library settings | 4 | KES 50/day fine · 14-day loan · 5 book limit · 7-day reservation expiry |
-| Transactions | 22 | 7 active · 4 overdue · 11 returned (with realistic backdated dates) |
-| Fines | 7 | 4 unpaid · 2 paid · 1 waived — all in KES |
-| Reservations | 11 | 5 pending · 2 fulfilled · 2 expired · 2 cancelled |
+| Staff accounts | 2 | Admin and librarian |
+| Member accounts | 2 | Alice and Bob |
+| Categories | 6 | Fiction, Non-Fiction, Science, History, Technology, Arts |
+| Books | 10 | Baseline manually curated titles |
+| Library settings | 4 | Fine rate, borrow days, book limit, reservation expiry |
+| Transactions | 2 | One active borrow and one returned late transaction |
+| Fines | 1 | Late-return fine |
+| Reservations | 1 | Pending reservation |
+| Notifications | 3 | Borrow, fine, and reservation examples |
 
-**Test credentials:**
-
-| Role | Email | Password |
-|---|---|---|
-| Admin | `admin@booktracking.com` | `Admin@1234` |
-| Librarian | `librarian@booktracking.com` | `Librarian@1234` |
-| Member | `alice@example.com` (or any of the 12) | `Member@1234` |
-
-The script is safe to re-run — it uses `get_or_create` throughout so nothing is duplicated. Transactions and fines are skipped on subsequent runs since they have no natural unique key.
-
-**To reset the database to a clean seed state:**
-
-```bash
-python manage.py flush --no-input
-python seed.py
-```
-
-### Import a larger demo catalog
-
-After seeding users, settings, members, and example transactions, import a richer
-Open Library catalog:
+### 7. Optional: import 500 Open Library books
 
 ```bash
 python manage.py import_openlibrary_books --limit 500 --copies 50
 ```
 
-The importer stores Open Library metadata in the local `books` table, uses remote
-cover URLs when available, skips duplicate ISBNs, and sets each imported book to
-50 total copies and 50 available copies. Normal app browsing still uses
-`/api/books/`; Open Library is not called by the frontend.
+This imports book records into the local `books` table. The frontend does not
+call Open Library directly during browsing; it reads the imported records from
+`/api/books/`.
 
-### 7. Start the development server
+Imported fields include:
+
+- Title, author, ISBN, publisher, published year, category.
+- `total_copies = 50` and `available_copies = 50`.
+- Cover URL.
+- Open Library work key.
+- Synopsis when available.
+- Subjects/tags.
+- Language codes.
+- Edition count.
+- Rating average and rating count.
+- Want-to-read, currently-reading, and already-read popularity counts.
+
+The importer skips invalid records and duplicate ISBNs. It fetches search results
+by topic and, unless `--skip-work-details` is passed, fetches work-level details
+for richer synopsis and subject data.
+
+### 8. Start the API server
 
 ```bash
 python manage.py runserver
 ```
 
-The API will be available at `http://localhost:8000/api/`.
+The API will be available at:
+
+```text
+http://localhost:8000/api/
+```
+
+---
+
+## Demo Credentials
+
+Created by `python manage.py seed`:
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | `admin@libratrack.com` | `Admin@1234` |
+| Librarian | `librarian@libratrack.com` | `Librarian@1234` |
+| Member | `alice@libratrack.com` | `Member@1234` |
+| Member | `bob@libratrack.com` | `Member@1234` |
+
+---
+
+## Resetting Local Data
+
+To clear local data and rebuild the demo state:
+
+```bash
+python manage.py flush --no-input
+python manage.py migrate
+python manage.py seed
+python manage.py import_openlibrary_books --limit 500 --copies 50
+```
+
+Skip the import command if you only need the small baseline catalog.
 
 ---
 
@@ -140,211 +216,271 @@ The API will be available at `http://localhost:8000/api/`.
 
 | Variable | Default | Description |
 |---|---|---|
-| `SECRET_KEY` | `dev-secret-key-change-in-production` | Django secret key — **always override in production** |
-| `DEBUG` | `False` | Enable debug mode (never True in production) |
+| `SECRET_KEY` | `dev-secret-key-change-in-production` | Django signing key; override outside local development |
+| `DEBUG` | `False` | Enables Django debug mode |
 | `DATABASE_NAME` | `libratrack` | MySQL schema name |
 | `DATABASE_USER` | `libratrack_user` | MySQL username |
 | `DATABASE_PASSWORD` | `libratrack_pass` | MySQL password |
 | `DATABASE_HOST` | `localhost` | MySQL host |
 | `DATABASE_PORT` | `3306` | MySQL port |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated list of allowed frontend origins |
-| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Comma-separated list of allowed Django hostnames |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated allowed frontend origins |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Comma-separated Django hostnames |
+
+For temporary tunnel testing, add the public tunnel origin to
+`CORS_ALLOWED_ORIGINS` and the tunnel hostname to `ALLOWED_HOSTS` if the backend
+is exposed directly. If the frontend proxies `/api` to the local backend, the
+backend can usually keep `localhost,127.0.0.1`.
 
 ---
 
 ## Project Structure
 
-```
+```text
 apps/
-├── auth_app/        # Users, roles, JWT tokens, refresh tokens
-├── books/           # Book catalogue
-├── categories/      # Book categories
-├── members/         # Library members
-├── transactions/    # Borrow and return records
-├── reservations/    # Book reservations
-├── fines/           # Overdue fines (KES)
-├── notifications/   # In-app notifications
-├── reports/         # Aggregated statistics
-└── settings_app/    # Configurable library rules
+├── auth_app/        Users, roles, JWT tokens, refresh tokens, signup
+├── books/           Catalog, Open Library importer, book metadata
+├── categories/      Dynamic book categories
+├── members/         Member profiles and member-scoped history
+├── transactions/    Borrow and return records
+├── reservations/    Book reservation lifecycle
+├── fines/           Paid, unpaid, and waived fines
+├── notifications/   In-app notifications and reminders
+├── reports/         Summary, inventory, borrowing, fines, members, export
+└── settings_app/    Configurable library rules
 
 libratrack/
 ├── settings/
-│   ├── base.py      # Shared settings
-│   ├── dev.py       # Development overrides
-│   └── test.py      # Test overrides
-└── urls.py          # Root URL configuration
+│   ├── base.py      Shared settings
+│   ├── dev.py       Local development settings
+│   └── test.py      Test settings
+└── urls.py          Root API routing
 
 shared/
-├── response.py      # EnvelopeRenderer + custom exception handler
-└── pagination.py    # StandardPagination
+├── pagination.py    Standard pagination response
+└── response.py      Response envelope and exception handler
 
-tests/               # pytest test suite (one file per app)
+tests/               pytest test suite
 ```
+
+---
+
+## API Response Envelope
+
+Success response:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": 1
+  }
+}
+```
+
+Paginated list:
+
+```json
+{
+  "status": "success",
+  "data": [],
+  "meta": {
+    "total": 42,
+    "page": 1,
+    "limit": 20,
+    "totalPages": 3
+  }
+}
+```
+
+Error response:
+
+```json
+{
+  "status": "error",
+  "message": "Human-readable description"
+}
+```
+
+Some errors include extra structured fields. For example, borrow-limit failures
+can include `activeBorrowCount`, `maxBooks`, and `remainingSlots`.
 
 ---
 
 ## API Overview
 
-All endpoints are prefixed with `/api/`. Every response is wrapped in an envelope:
-
-```json
-// Success — single object
-{ "status": "success", "data": { ... } }
-
-// Success — list with pagination
-{ "status": "success", "data": [...], "meta": { "total": 42, "page": 1, "limit": 10, "totalPages": 5 } }
-
-// Error
-{ "status": "error", "message": "Human-readable description" }
-```
+All endpoints are prefixed with `/api`.
 
 ### Authentication
 
-| Method | Endpoint | Auth required | Description |
+| Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| POST | `/api/auth/login` | No | Exchange credentials for tokens |
-| POST | `/api/auth/logout` | Yes | Revoke refresh token |
-| POST | `/api/auth/refresh` | No | Renew access token via cookie |
-| GET | `/api/auth/me` | Yes | Return current user profile |
-| PATCH | `/api/auth/change-password` | Yes | Update password; clears must-change flag |
+| POST | `/auth/signup` | Public | Public member self-registration |
+| POST | `/auth/login` | Public | Exchange credentials for tokens |
+| POST | `/auth/logout` | Required | Revoke refresh token |
+| POST | `/auth/refresh` | Cookie | Rotate refresh token and return a new access token |
+| GET | `/auth/me` | Required | Return the current user |
+| PATCH | `/auth/me` | Required | Update current user account details |
+| PATCH | `/auth/change-password` | Required | Change password and clear must-change flag |
 
-### Books
-
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/books/` | List books (paginated, searchable) |
-| POST | `/api/books/` | Create a book |
-| GET | `/api/books/{id}/` | Retrieve a book |
-| PATCH | `/api/books/{id}/` | Update a book |
-| DELETE | `/api/books/{id}/` | Delete a book |
-
-### Categories
+### Books and Categories
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/categories/` | List all categories |
-| POST | `/api/categories/` | Create a category |
+| GET | `/books/` | List books with pagination, search, filters, and sorting |
+| POST | `/books/` | Create a book |
+| GET | `/books/{id}/` | Retrieve a book |
+| PATCH | `/books/{id}/` | Update a book |
+| DELETE | `/books/{id}/` | Delete a book |
+| GET | `/categories/` | List categories with book counts |
+| POST | `/categories/` | Create a category |
+| GET | `/categories/{id}/` | Retrieve a category |
+| PATCH | `/categories/{id}/` | Update a category |
+| DELETE | `/categories/{id}/` | Delete a category |
 
 ### Members
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/members/` | List members (paginated, searchable) |
-| POST | `/api/members/` | Create a member (auto-generates membership number) |
-| GET | `/api/members/{id}/` | Retrieve a member |
-| PATCH | `/api/members/{id}/` | Update a member |
-| DELETE | `/api/members/{id}/` | Delete a member (admin only) |
-| GET | `/api/members/{id}/transactions/` | Member's transaction history |
-| GET | `/api/members/{id}/reservations/` | Member's reservations |
-| GET | `/api/members/{id}/fines/` | Member's fines |
+| GET | `/members/` | List members with pagination/search |
+| POST | `/members/` | Staff-created member account |
+| GET | `/members/{id}/` | Retrieve a member |
+| PATCH | `/members/{id}/` | Update member/profile details |
+| DELETE | `/members/{id}/` | Permanently delete member; admin only |
+| GET | `/members/{id}/transactions/` | Member transaction history |
+| GET | `/members/{id}/reservations/` | Member reservations |
+| GET | `/members/{id}/fines/` | Member fines |
 
 ### Transactions
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/transactions/` | List all transactions |
-| POST | `/api/transactions/` | Create a borrow transaction |
-| GET | `/api/transactions/{id}/` | Retrieve a transaction |
-| POST | `/api/transactions/{id}/return/` | Process a return |
+| GET | `/transactions/` | List transactions with status/member/book/search filters |
+| POST | `/transactions/` | Create a borrow transaction with one or more books |
+| GET | `/transactions/{id}/` | Retrieve a transaction |
+| POST | `/transactions/{id}/return/` | Return all or selected transaction items |
+
+Return selected items with:
+
+```json
+{
+  "itemIds": [1, 2]
+}
+```
 
 ### Reservations
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/reservations/` | List reservations |
-| POST | `/api/reservations/` | Create a reservation |
-| POST | `/api/reservations/{id}/cancel/` | Cancel a reservation |
-| PATCH | `/api/reservations/{id}/fulfill/` | Approve (fulfill) a reservation |
+| GET | `/reservations/` | List reservations for admin/librarian users |
+| POST | `/reservations/` | Create a reservation |
+| GET | `/reservations/{id}/` | Retrieve a reservation |
+| PATCH | `/reservations/{id}/cancel/` | Cancel a reservation |
+| PATCH | `/reservations/{id}/fulfill/` | Fulfill/approve a reservation |
 
 ### Fines
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/fines/` | List all fines |
-| PATCH | `/api/fines/{id}/pay/` | Mark a fine as paid |
+| GET | `/fines/` | List fines with filters/search |
+| GET | `/fines/{id}/` | Retrieve a fine |
+| PATCH | `/fines/{id}/pay/` | Mark a fine as paid |
+| PATCH | `/fines/{id}/waive/` | Waive a fine with optional note; admin only |
 
 ### Reports
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/reports/borrowing/` | Borrowing stats (active/returned/overdue) |
-| GET | `/api/reports/fines/` | Fine totals (paid/unpaid) |
-| GET | `/api/reports/inventory/` | Inventory by category |
-| GET | `/api/reports/popular/` | Most borrowed books |
+| GET | `/reports/summary/` | Dashboard summary totals |
+| GET | `/reports/borrowing/` | Active, overdue, and returned transaction counts |
+| GET | `/reports/inventory/` | Book counts by category |
+| GET | `/reports/fines/` | Total, paid, and unpaid fine totals |
+| GET | `/reports/overdue/` | Overdue transaction detail |
+| GET | `/reports/popular-books/` | Most borrowed books |
+| GET | `/reports/members/` | Active/inactive member totals |
+| POST | `/reports/export` | CSV export for supported reports |
 
-### Settings
+CSV export request:
+
+```json
+{
+  "type": "csv",
+  "report": "borrowing"
+}
+```
+
+Supported export reports: `borrowing`, `inventory`, `fines`, `members`,
+`popular-books`.
+
+### Settings and Notifications
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/settings/` | Retrieve library settings |
-| PATCH | `/api/settings/` | Update library settings |
-
-### Notifications
-
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/notifications/` | List notifications for current user |
-| PATCH | `/api/notifications/{id}/read/` | Mark a notification as read |
+| GET | `/settings/` | Retrieve library settings |
+| PATCH | `/settings/` | Update library settings |
+| GET | `/notifications/` | List notifications for the current user |
+| PATCH | `/notifications/{id}/read/` | Mark one notification as read |
+| PATCH | `/notifications/read-all/` | Mark all notifications as read |
+| POST | `/notifications/remind/` | Generate/send overdue reminders |
 
 ---
 
 ## Authentication Details
 
-### Access tokens
+- Access tokens are JWTs signed with `SECRET_KEY` using HS256.
+- Access token payload includes `sub`, `email`, `role`, `iat`, and `exp`.
+- Access tokens last 15 minutes.
+- Refresh tokens are random 64-character hex values.
+- Only refresh-token hashes are stored in the database.
+- Refresh tokens are sent in an HttpOnly `refreshToken` cookie.
+- Refresh tokens last 7 days and are rotated on refresh.
+- Passwords are hashed with bcrypt.
 
-- JWT signed with `SECRET_KEY` using HS256.
-- Payload: `{ sub, email, role, iat, exp }`.
-- Lifetime: **15 minutes**.
-- Sent by the client in the `Authorization: Bearer <token>` header.
+---
 
-### Refresh tokens
+## Management Commands
 
-- A cryptographically random 64-character hex value.
-- Only the bcrypt hash is stored in the `refresh_tokens` table — the raw value is never stored.
-- Sent and received via an HttpOnly `refreshToken` cookie.
-- Lifetime: **7 days**.
-- Rotated on every use (old token revoked, new token issued).
+| Command | Description |
+|---|---|
+| `python manage.py seed` | Create demo roles, accounts, baseline books, settings, transactions, fines, reservations, and notifications |
+| `python manage.py import_openlibrary_books --limit 500 --copies 50` | Import Open Library books into the local catalog |
+| `python manage.py import_openlibrary_books --limit 500 --copies 50 --skip-work-details` | Faster import without per-work synopsis enrichment |
+| `python manage.py mark_overdue` | Mark active transactions past due date as overdue |
 
-### Password storage
-
-Passwords are hashed with bcrypt (12 rounds) and stored in the `password_hash` column. Django's default `AbstractBaseUser` password field is overridden to use this scheme.
+Run `mark_overdue` on a schedule in a longer-lived environment so overdue status
+stays accurate.
 
 ---
 
 ## Running Tests
 
 ```bash
-source venv/bin/activate
 pytest
 ```
 
-To run a specific test file:
+Run a focused file:
 
 ```bash
 pytest tests/test_transactions.py -v
 ```
 
-The test suite uses an in-memory SQLite database (configured in `libratrack/settings/test.py`) so no MySQL instance is required for testing.
+Tests use the SQLite-backed test settings in `libratrack/settings/test.py`, so a
+local MySQL database is not required for the test suite.
 
 ---
 
 ## Docker
 
-A `Dockerfile` and `docker-compose.yml` are included. The compose file starts two services:
+The repo includes a `Dockerfile` and `docker-compose.yml` with:
 
-| Service | Image | Port |
+| Service | Purpose | Port |
 |---|---|---|
-| `db` | mysql:8 | 3306 |
-| `web` | Built from `Dockerfile` (python:3.12-slim) | 8000 |
+| `db` | MySQL database | 3306 |
+| `web` | Django API | 8000 |
 
-MySQL data is persisted in a named volume (`mysql_data`) so it survives container restarts.
-
-### 1. Create your `.env` file
-
-The `web` container reads from `.env` at the project root. The compose file already sets the matching database credentials, so you only need to set the Django secret key and CORS origin:
+Create `.env` for Docker:
 
 ```env
-SECRET_KEY=your-long-random-secret-key
+SECRET_KEY=dev-secret-key-change-in-production
 DEBUG=True
 DATABASE_NAME=libratrack
 DATABASE_USER=libratrack_user
@@ -352,64 +488,33 @@ DATABASE_PASSWORD=libratrack_pass
 DATABASE_HOST=db
 DATABASE_PORT=3306
 CORS_ALLOWED_ORIGINS=http://localhost:5173
+ALLOWED_HOSTS=localhost,127.0.0.1
 ```
 
-> **Important:** `DATABASE_HOST` must be `db` (the compose service name), not `localhost`.
+`DATABASE_HOST` must be `db` inside Docker Compose.
 
-### 2. Build and start
+Start services:
 
 ```bash
 docker compose up --build
 ```
 
-The `web` service waits for the `db` service to pass its health check before starting, so the database is guaranteed to be ready when Django connects.
-
-### 3. Run migrations (first time only)
-
-In a second terminal while the containers are running:
+Run setup commands in another terminal:
 
 ```bash
 docker compose exec web python manage.py migrate
+docker compose exec web python manage.py seed
+docker compose exec web python manage.py import_openlibrary_books --limit 500 --copies 50
 ```
 
-### 4. Seed the database
+Stop services:
 
 ```bash
-docker compose exec web python seed.py
+docker compose down
 ```
 
-This creates all roles, staff accounts, 12 member accounts, 32 books across 12 categories, library settings, transactions, fines, and reservations — the same data as the local seed.
-
-**Test credentials after seeding:**
-
-| Role | Email | Password |
-|---|---|---|
-| Admin | `admin@booktracking.com` | `Admin@1234` |
-| Librarian | `librarian@booktracking.com` | `Librarian@1234` |
-| Member | `alice@example.com` (or any of the 12) | `Member@1234` |
-
-**To reset the database and re-seed from scratch:**
+Delete the database volume too:
 
 ```bash
-docker compose exec web python manage.py flush --no-input
-docker compose exec web python seed.py
-```
-
-### 5. Verify
-
-The API will be available at `http://localhost:8000/api/`.
-
-### Stopping
-
-```bash
-docker compose down          # stop containers, keep volume
-docker compose down -v       # stop containers and delete database volume
-```
-
-### Rebuilding after dependency changes
-
-If you add packages to `requirements.txt`, rebuild the image:
-
-```bash
-docker compose up --build
+docker compose down -v
 ```
