@@ -149,6 +149,13 @@ main workflows:
 python manage.py import_openlibrary_books --limit 500 --copies 50
 ```
 
+If Open Library is slow or Python networking times out on Windows, use the
+curl-backed importer with a smaller page size:
+
+```bash
+python manage.py import_openlibrary_books --limit 500 --copies 50 --skip-work-details --http-client curl --timeout 60 --retries 6 --page-size 25
+```
+
 This imports book records into the local `books` table. The frontend does not
 call Open Library directly during browsing; it reads the imported records from
 `/api/books/`.
@@ -443,7 +450,7 @@ Supported export reports: `borrowing`, `inventory`, `fines`, `members`,
 |---|---|
 | `python manage.py seed` | Create demo roles, accounts, baseline books, settings, transactions, fines, reservations, and notifications |
 | `python manage.py import_openlibrary_books --limit 500 --copies 50` | Import Open Library books into the local catalog |
-| `python manage.py import_openlibrary_books --limit 500 --copies 50 --skip-work-details` | Faster import without per-work synopsis enrichment |
+| `python manage.py import_openlibrary_books --limit 500 --copies 50 --skip-work-details --http-client curl --timeout 60 --retries 6 --page-size 25` | More reliable import for slow Open Library responses or Windows networking timeouts |
 | `python manage.py mark_overdue` | Mark active transactions past due date as overdue |
 
 Run `mark_overdue` on a schedule in a longer-lived environment so overdue status

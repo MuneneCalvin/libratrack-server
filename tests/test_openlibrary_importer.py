@@ -185,6 +185,68 @@ def test_fetch_openlibrary_docs_filters_malformed_results(monkeypatch):
     assert importer.fetch_openlibrary_docs('programming') == [{'title': 'Example'}]
 
 
+def test_fetch_openlibrary_docs_can_use_curl(monkeypatch):
+    captured = {}
+
+    class FakeCompletedProcess:
+        returncode = 0
+        stdout = json.dumps({'docs': [{'title': 'Curl Example'}]})
+        stderr = ''
+
+    def fake_run(command, capture_output, check, text, timeout):
+        captured['command'] = command
+        captured['capture_output'] = capture_output
+        captured['check'] = check
+        captured['text'] = text
+        captured['timeout'] = timeout
+        return FakeCompletedProcess()
+
+    monkeypatch.setattr(importer.subprocess, 'run', fake_run)
+
+    docs = importer.fetch_openlibrary_docs(
+        'programming',
+        page=2,
+        limit=25,
+        timeout=7,
+        http_client='curl',
+    )
+
+    assert docs == [{'title': 'Curl Example'}]
+    assert captured['command'][0] == 'curl'
+    assert '--max-time' in captured['command']
+    assert '7' in captured['command']
+    assert '-A' in captured['command']
+    assert importer.OPEN_LIBRARY_USER_AGENT in captured['command']
+    assert 'q=programming' in captured['command'][-1]
+    assert 'page=2' in captured['command'][-1]
+    assert 'limit=25' in captured['command'][-1]
+    assert captured['capture_output'] is True
+    assert captured['check'] is False
+    assert captured['text'] is True
+    assert captured['timeout'] == 12
+
+
+def test_fetch_openlibrary_docs_auto_uses_curl_when_available(monkeypatch):
+    calls = {'curl': 0, 'urllib': 0}
+
+    def fake_curl(url, timeout):
+        calls['curl'] += 1
+        return {'docs': [{'title': 'Auto Curl'}]}
+
+    def fake_urllib(url, timeout):
+        calls['urllib'] += 1
+        return {'docs': [{'title': 'Auto Urllib'}]}
+
+    monkeypatch.setattr(importer.shutil, 'which', lambda command: '/usr/bin/curl')
+    monkeypatch.setattr(importer, '_load_json_url_with_curl', fake_curl)
+    monkeypatch.setattr(importer, '_load_json_url_with_urllib', fake_urllib)
+
+    assert importer.fetch_openlibrary_docs('programming', http_client='auto') == [
+        {'title': 'Auto Curl'}
+    ]
+    assert calls == {'curl': 1, 'urllib': 0}
+
+
 def test_fetch_openlibrary_work_builds_work_request(monkeypatch):
     captured = {}
 

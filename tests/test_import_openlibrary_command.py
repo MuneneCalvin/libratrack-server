@@ -25,7 +25,7 @@ def test_import_command_creates_books_with_default_copy_count(monkeypatch):
         make_doc('Imported Two', '9780000000002'),
     ]
 
-    def fake_fetch(query, page=1, limit=100, timeout=10):
+    def fake_fetch(query, page=1, limit=100, timeout=30, http_client='urllib'):
         return docs if query == 'fiction' and page == 1 else []
 
     monkeypatch.setattr(command_module, 'fetch_openlibrary_docs', fake_fetch)
@@ -61,10 +61,10 @@ def test_import_command_enriches_books_with_work_metadata(monkeypatch):
         }
     )
 
-    def fake_fetch(query, page=1, limit=100, timeout=10):
+    def fake_fetch(query, page=1, limit=100, timeout=30, http_client='urllib'):
         return [doc] if query == 'fiction' and page == 1 else []
 
-    def fake_fetch_work(work_key):
+    def fake_fetch_work(work_key, timeout=30, http_client='urllib'):
         assert work_key == '/works/OL111W'
         return {
             'description': 'A useful synopsis for members.',
@@ -94,7 +94,7 @@ def test_import_command_can_skip_work_detail_requests(monkeypatch):
     doc = make_doc('Fast Import', '9780000000112')
     doc['key'] = '/works/OL112W'
 
-    def fake_fetch(query, page=1, limit=100, timeout=10):
+    def fake_fetch(query, page=1, limit=100, timeout=30, http_client='urllib'):
         return [doc] if query == 'fiction' and page == 1 else []
 
     def fail_fetch_work(work_key):
@@ -122,7 +122,7 @@ def test_import_command_skips_duplicate_isbns(monkeypatch):
         available_copies=3,
     )
 
-    def fake_fetch(query, page=1, limit=100, timeout=10):
+    def fake_fetch(query, page=1, limit=100, timeout=30, http_client='urllib'):
         return [make_doc('Duplicate Book', '9780000000001')] if page == 1 else []
 
     monkeypatch.setattr(command_module, 'fetch_openlibrary_docs', fake_fetch)
@@ -138,7 +138,7 @@ def test_import_command_skips_duplicate_isbns(monkeypatch):
 
 @pytest.mark.django_db
 def test_import_command_skips_invalid_results(monkeypatch):
-    def fake_fetch(query, page=1, limit=100, timeout=10):
+    def fake_fetch(query, page=1, limit=100, timeout=30, http_client='urllib'):
         return [{'title': 'Missing ISBN', 'author_name': ['Demo Author']}] if page == 1 else []
 
     monkeypatch.setattr(command_module, 'fetch_openlibrary_docs', fake_fetch)
@@ -156,7 +156,7 @@ def test_import_command_stops_at_limit(monkeypatch):
         make_doc('Imported Three', '9780000000003'),
     ]
 
-    def fake_fetch(query, page=1, limit=100, timeout=10):
+    def fake_fetch(query, page=1, limit=100, timeout=30, http_client='urllib'):
         return docs if query == 'fiction' and page == 1 else []
 
     monkeypatch.setattr(command_module, 'fetch_openlibrary_docs', fake_fetch)
@@ -171,7 +171,7 @@ def test_import_command_stops_at_limit(monkeypatch):
 def test_import_command_continues_after_source_failure(monkeypatch):
     calls = []
 
-    def fake_fetch(query, page=1, limit=100, timeout=10):
+    def fake_fetch(query, page=1, limit=100, timeout=30, http_client='urllib'):
         calls.append((query, page))
         if query == 'fiction':
             raise TimeoutError('network timeout')
@@ -190,6 +190,41 @@ def test_import_command_continues_after_source_failure(monkeypatch):
     assert ('classic literature', 1) in calls
 
 
+@pytest.mark.django_db
+def test_import_command_passes_network_options_to_fetcher(monkeypatch):
+    captured = {}
+
+    def fake_fetch(query, page=1, limit=100, timeout=30, http_client='urllib'):
+        captured['query'] = query
+        captured['page'] = page
+        captured['limit'] = limit
+        captured['timeout'] = timeout
+        captured['http_client'] = http_client
+        return [make_doc('Tuned Import', '9780000000101')]
+
+    monkeypatch.setattr(command_module, 'fetch_openlibrary_docs', fake_fetch)
+
+    call_command(
+        'import_openlibrary_books',
+        limit=1,
+        copies=50,
+        page_size=25,
+        timeout=60,
+        retries=2,
+        http_client='curl',
+        skip_work_details=True,
+    )
+
+    assert Book.objects.count() == 1
+    assert captured == {
+        'query': 'fiction',
+        'page': 1,
+        'limit': 25,
+        'timeout': 60,
+        'http_client': 'curl',
+    }
+
+
 def test_import_command_rejects_invalid_limit():
     with pytest.raises(CommandError, match='--limit must be greater than 0'):
         call_command('import_openlibrary_books', limit=0, copies=50)
@@ -198,3 +233,18 @@ def test_import_command_rejects_invalid_limit():
 def test_import_command_rejects_invalid_copies():
     with pytest.raises(CommandError, match='--copies must be greater than 0'):
         call_command('import_openlibrary_books', limit=1, copies=0)
+
+
+def test_import_command_rejects_invalid_page_size():
+    with pytest.raises(CommandError, match='--page-size must be greater than 0'):
+        call_command('import_openlibrary_books', limit=1, copies=50, page_size=0)
+
+
+def test_import_command_rejects_invalid_timeout():
+    with pytest.raises(CommandError, match='--timeout must be greater than 0'):
+        call_command('import_openlibrary_books', limit=1, copies=50, timeout=0)
+
+
+def test_import_command_rejects_invalid_retries():
+    with pytest.raises(CommandError, match='--retries must be greater than 0'):
+        call_command('import_openlibrary_books', limit=1, copies=50, retries=0)

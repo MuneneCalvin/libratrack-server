@@ -1,5 +1,7 @@
 import json
 import re
+import shutil
+import subprocess
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode
@@ -9,6 +11,8 @@ from urllib.request import Request, urlopen
 OPEN_LIBRARY_SEARCH_URL = 'https://openlibrary.org/search.json'
 OPEN_LIBRARY_BASE_URL = 'https://openlibrary.org'
 OPEN_LIBRARY_COVER_BASE_URL = 'https://covers.openlibrary.org/b'
+OPEN_LIBRARY_USER_AGENT = 'LibraTrack Open Library importer'
+HTTP_CLIENTS = {'auto', 'urllib', 'curl'}
 SEARCH_FIELDS = ','.join(
     [
         'key',
@@ -292,7 +296,8 @@ def fetch_openlibrary_docs(
     query: str,
     page: int = 1,
     limit: int = 100,
-    timeout: int = 10,
+    timeout: int = 30,
+    http_client: str = 'urllib',
 ) -> list[dict[str, object]]:
     params = urlencode(
         {
@@ -302,12 +307,7 @@ def fetch_openlibrary_docs(
             'fields': SEARCH_FIELDS,
         }
     )
-    request = Request(
-        f'{OPEN_LIBRARY_SEARCH_URL}?{params}',
-        headers={'User-Agent': 'LibraTrack Open Library importer'},
-    )
-    with urlopen(request, timeout=timeout) as response:
-        payload = json.loads(response.read().decode('utf-8'))
+    payload = _load_json_url(f'{OPEN_LIBRARY_SEARCH_URL}?{params}', timeout, http_client)
 
     docs = payload.get('docs', [])
     if not isinstance(docs, list):
@@ -317,17 +317,60 @@ def fetch_openlibrary_docs(
 
 def fetch_openlibrary_work(
     work_key: str,
-    timeout: int = 10,
+    timeout: int = 30,
+    http_client: str = 'urllib',
 ) -> dict[str, object]:
     normalized_key = _normalize_work_key(work_key)
     if normalized_key is None:
         return {}
 
+    payload = _load_json_url(f'{OPEN_LIBRARY_BASE_URL}{normalized_key}.json', timeout, http_client)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _load_json_url(url: str, timeout: int, http_client: str) -> dict[str, object]:
+    if http_client not in HTTP_CLIENTS:
+        raise ValueError(f'Unsupported Open Library HTTP client: {http_client}')
+
+    if http_client == 'curl' or (http_client == 'auto' and shutil.which('curl')):
+        return _load_json_url_with_curl(url, timeout)
+
+    return _load_json_url_with_urllib(url, timeout)
+
+
+def _load_json_url_with_urllib(url: str, timeout: int) -> dict[str, object]:
     request = Request(
-        f'{OPEN_LIBRARY_BASE_URL}{normalized_key}.json',
-        headers={'User-Agent': 'LibraTrack Open Library importer'},
+        url,
+        headers={'User-Agent': OPEN_LIBRARY_USER_AGENT},
     )
     with urlopen(request, timeout=timeout) as response:
         payload = json.loads(response.read().decode('utf-8'))
 
+    return payload if isinstance(payload, dict) else {}
+
+
+def _load_json_url_with_curl(url: str, timeout: int) -> dict[str, object]:
+    completed = subprocess.run(
+        [
+            'curl',
+            '-L',
+            '--fail',
+            '--silent',
+            '--show-error',
+            '--max-time',
+            str(timeout),
+            '-A',
+            OPEN_LIBRARY_USER_AGENT,
+            url,
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=timeout + 5,
+    )
+    if completed.returncode != 0:
+        error = completed.stderr.strip() or completed.stdout.strip()
+        raise RuntimeError(f'curl failed with exit code {completed.returncode}: {error}')
+
+    payload = json.loads(completed.stdout)
     return payload if isinstance(payload, dict) else {}

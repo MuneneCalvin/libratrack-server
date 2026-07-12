@@ -19,6 +19,15 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--limit', type=int, default=500)
         parser.add_argument('--copies', type=int, default=50)
+        parser.add_argument('--page-size', type=int, default=50)
+        parser.add_argument('--timeout', type=int, default=30)
+        parser.add_argument('--retries', type=int, default=5)
+        parser.add_argument(
+            '--http-client',
+            choices=['auto', 'urllib', 'curl'],
+            default='auto',
+            help='HTTP client used for Open Library requests. Auto prefers curl when available.',
+        )
         parser.add_argument(
             '--skip-work-details',
             action='store_true',
@@ -28,12 +37,22 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         target = options['limit']
         copies = options['copies']
+        page_size = options['page_size']
+        timeout = options['timeout']
+        retries = options['retries']
+        http_client = options['http_client']
         skip_work_details = options['skip_work_details']
 
         if target < 1:
             raise CommandError('--limit must be greater than 0')
         if copies < 1:
             raise CommandError('--copies must be greater than 0')
+        if page_size < 1:
+            raise CommandError('--page-size must be greater than 0')
+        if timeout < 1:
+            raise CommandError('--timeout must be greater than 0')
+        if retries < 1:
+            raise CommandError('--retries must be greater than 0')
 
         summary = {
             'imported': 0,
@@ -53,7 +72,14 @@ class Command(BaseCommand):
 
             page = 1
             while summary['imported'] < target:
-                docs = self._fetch_with_retries(query, page)
+                docs = self._fetch_with_retries(
+                    query,
+                    page,
+                    page_size=page_size,
+                    timeout=timeout,
+                    retries=retries,
+                    http_client=http_client,
+                )
                 if not docs:
                     break
 
@@ -71,7 +97,12 @@ class Command(BaseCommand):
                         continue
 
                     if candidate.openlibrary_work_key and not skip_work_details:
-                        work = self._fetch_work_with_retries(candidate.openlibrary_work_key)
+                        work = self._fetch_work_with_retries(
+                            candidate.openlibrary_work_key,
+                            timeout=timeout,
+                            retries=retries,
+                            http_client=http_client,
+                        )
                         if work:
                             candidate = enrich_candidate_with_work_details(candidate, work)
                         else:
@@ -108,26 +139,36 @@ class Command(BaseCommand):
         self.stdout.write(f"Categories created: {summary['categories_created']}")
         self.stdout.write(f"Work detail failures: {summary['details_failed']}")
 
-    def _fetch_with_retries(self, query, page):
-        for attempt in range(1, 4):
+    def _fetch_with_retries(self, query, page, *, page_size, timeout, retries, http_client):
+        for attempt in range(1, retries + 1):
             try:
-                return fetch_openlibrary_docs(query, page=page, limit=100)
+                return fetch_openlibrary_docs(
+                    query,
+                    page=page,
+                    limit=page_size,
+                    timeout=timeout,
+                    http_client=http_client,
+                )
             except Exception as exc:
-                if attempt == 3:
+                if attempt == retries:
                     self.stderr.write(
                         f'Open Library query failed for "{query}" page {page}: {exc}'
                     )
                     return []
-                time.sleep(0.5 * attempt)
+                time.sleep(min(0.75 * attempt, 5))
         return []
 
-    def _fetch_work_with_retries(self, work_key):
-        for attempt in range(1, 4):
+    def _fetch_work_with_retries(self, work_key, *, timeout, retries, http_client):
+        for attempt in range(1, retries + 1):
             try:
-                return fetch_openlibrary_work(work_key)
+                return fetch_openlibrary_work(
+                    work_key,
+                    timeout=timeout,
+                    http_client=http_client,
+                )
             except Exception as exc:
-                if attempt == 3:
+                if attempt == retries:
                     self.stderr.write(f'Open Library work detail failed for "{work_key}": {exc}')
                     return {}
-                time.sleep(0.5 * attempt)
+                time.sleep(min(0.75 * attempt, 5))
         return {}
