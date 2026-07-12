@@ -12,6 +12,11 @@ def test_summary_admin(admin_client, book, member):
     assert resp.status_code == 200
     data = resp.json()['data']
     assert 'totalBooks' in data
+    assert data['totalCopies'] == 3
+    assert data['availableBooks'] == 3
+    assert data['availableCopies'] == 3
+    assert data['borrowedBooks'] == 0
+    assert data['reservedBooks'] == 0
     assert 'totalMembers' in data
     assert 'activeBorrows' in data
     assert 'overdueCount' in data
@@ -42,6 +47,22 @@ def test_summary_counts_pending_reservations(admin_client, book, member):
     resp = admin_client.get('/api/reports/summary/')
     assert resp.status_code == 200
     assert resp.json()['data']['pendingReservations'] == 1
+    assert resp.json()['data']['reservedBooks'] == 1
+
+
+@pytest.mark.django_db
+def test_summary_counts_active_borrowed_books(admin_client, book, member):
+    tx = BorrowTransaction.objects.create(
+        member=member,
+        borrowed_at=timezone.now() - timedelta(days=2),
+        due_date=timezone.now() + timedelta(days=12),
+        status='ACTIVE',
+    )
+    TransactionItem.objects.create(transaction=tx, book=book)
+    resp = admin_client.get('/api/reports/summary/')
+    assert resp.status_code == 200
+    assert resp.json()['data']['activeBorrows'] == 1
+    assert resp.json()['data']['borrowedBooks'] == 1
 
 
 @pytest.mark.django_db

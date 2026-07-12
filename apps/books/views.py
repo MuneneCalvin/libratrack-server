@@ -1,4 +1,5 @@
 from django.db import models as db_models
+from django.db.models import F
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 
@@ -22,6 +23,7 @@ class BookListCreateView(generics.ListCreateAPIView):
         search = self.request.query_params.get('q') or self.request.query_params.get('search')
         category = self.request.query_params.get('category')
         available = self.request.query_params.get('available')
+        sort = self.request.query_params.get('sort')
         if search:
             qs = qs.filter(
                 db_models.Q(title__icontains=search)
@@ -35,6 +37,16 @@ class BookListCreateView(generics.ListCreateAPIView):
                 qs = qs.filter(available_copies__gt=0)
             elif available.lower() in ('false', '0', 'no'):
                 qs = qs.filter(available_copies=0)
+        if sort == 'rating':
+            qs = qs.order_by(F('rating_average').desc(nulls_last=True), '-rating_count', '-created_at')
+        elif sort == 'most_read':
+            qs = qs.order_by('-already_read_count', '-rating_count', '-created_at')
+        elif sort == 'popular':
+            qs = qs.annotate(
+                popularity_score=F('want_to_read_count') + F('currently_reading_count') + F('already_read_count')
+            ).order_by('-popularity_score', '-rating_count', '-created_at')
+        elif sort == 'title':
+            qs = qs.order_by('title')
         return qs
 
 
