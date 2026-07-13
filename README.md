@@ -71,12 +71,15 @@ cp .env.example .env
 Example local `.env`:
 
 ```env
-SECRET_KEY=dev-secret-key-change-in-production
-DATABASE_NAME=libratrack
-DATABASE_USER=libratrack_user
-DATABASE_PASSWORD=libratrack_pass
-DATABASE_HOST=localhost
-DATABASE_PORT=3306
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=libratrack_php
+DB_USER=root
+DB_PASSWORD=
+
+JWT_SECRET=dev-secret-key-change-in-production
+JWT_ACCESS_TTL_MINUTES=15
+JWT_REFRESH_TTL_DAYS=7
 COOKIE_SECURE=false
 ```
 
@@ -368,7 +371,7 @@ Supported export reports: `borrowing`, `inventory`, `fines`, `members`,
 
 ## Authentication Details
 
-- Access tokens are JWTs signed with `SECRET_KEY` using HS256.
+- Access tokens are JWTs signed with `JWT_SECRET` using HS256.
 - Access token payload includes `sub`, `email`, `role`, `iat`, and `exp`.
 - Access tokens last 15 minutes.
 - Refresh tokens are random 64-character hex values.
@@ -406,12 +409,14 @@ vendor/bin/phpunit tests/Feature/AuthEndpointTest.php
 
 | Variable | Default | Description |
 |---|---|---|
-| `SECRET_KEY` | `dev-secret-key-change-in-production` | JWT signing key; override outside local development |
-| `DATABASE_NAME` | `libratrack` | MySQL schema name |
-| `DATABASE_USER` | `libratrack_user` | MySQL username |
-| `DATABASE_PASSWORD` | `libratrack_pass` | MySQL password |
-| `DATABASE_HOST` | `localhost` | MySQL host |
-| `DATABASE_PORT` | `3306` | MySQL port |
+| `JWT_SECRET` | `dev-secret-key-change-in-production` | JWT signing key; override outside local development |
+| `JWT_ACCESS_TTL_MINUTES` | `15` | Access token lifetime in minutes |
+| `JWT_REFRESH_TTL_DAYS` | `7` | Refresh token lifetime in days |
+| `DB_NAME` | `libratrack_php` | MySQL schema name |
+| `DB_USER` | `root` | MySQL username |
+| `DB_PASSWORD` | (empty) | MySQL password |
+| `DB_HOST` | `127.0.0.1` | MySQL host |
+| `DB_PORT` | `3306` | MySQL port |
 | `COOKIE_SECURE` | `false` | Set to `true` in production with HTTPS |
 
 ---

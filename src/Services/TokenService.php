@@ -9,6 +9,7 @@ use DateTimeImmutable;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use LibraTrack\Core\Config;
+use LibraTrack\Core\ValidationException;
 
 final class TokenService
 {
@@ -32,7 +33,12 @@ final class TokenService
 
     public function decodeAccessToken(string $token): array
     {
-        $decoded = JWT::decode($token, new Key($this->config->get('JWT_SECRET'), 'HS256'));
+        try {
+            $decoded = JWT::decode($token, new Key($this->config->get('JWT_SECRET'), 'HS256'));
+        } catch (\UnexpectedValueException) {
+            throw new ValidationException('Invalid or expired token', 401);
+        }
+
         return json_decode(json_encode($decoded, JSON_THROW_ON_ERROR), true, 512, JSON_THROW_ON_ERROR);
     }
 
