@@ -35,7 +35,7 @@ own account.
 
 | Layer | Technology |
 |---|---|
-| Language | PHP 8.5+ |
+| Language | PHP 8.2+ |
 | Framework | Plain PHP with custom HTTP core |
 | Database | MySQL 8 via PDO |
 | Authentication | Custom JWT with php-jwt and password_hash |
