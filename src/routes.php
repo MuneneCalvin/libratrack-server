@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use LibraTrack\Controllers\AuthController;
+use LibraTrack\Controllers\CategoryController;
 use LibraTrack\Controllers\SettingsController;
 use LibraTrack\Core\Config;
 use LibraTrack\Core\Database;
@@ -11,6 +12,7 @@ use LibraTrack\Core\Response;
 use LibraTrack\Core\Router;
 use LibraTrack\Middleware\AuthMiddleware;
 use LibraTrack\Middleware\RoleMiddleware;
+use LibraTrack\Repositories\CategoryRepository;
 use LibraTrack\Repositories\MemberRepository;
 use LibraTrack\Repositories\RefreshTokenRepository;
 use LibraTrack\Repositories\SettingsRepository;
@@ -32,6 +34,7 @@ $authMiddleware = new AuthMiddleware($tokens);
 $roleMiddleware = new RoleMiddleware();
 $auth = new AuthController($authService, $authMiddleware, $config->bool('COOKIE_SECURE', false));
 $settings = new SettingsController(new SettingsRepository($pdo));
+$categoryController = new CategoryController(new CategoryRepository($pdo), $authMiddleware, $roleMiddleware);
 
 $router = new Router();
 
@@ -48,5 +51,11 @@ $router->add('PATCH', '/api/auth/change-password/', fn (Request $request, array 
 $router->add('GET', '/api/settings/', fn (Request $request, array $params): Response => $settings->show($request));
 $router->add('PATCH', '/api/settings/', fn (Request $request, array $params): Response => $settings->update($request));
 $router->add('PUT', '/api/settings/', fn (Request $request, array $params): Response => $settings->update($request));
+$router->add('GET', '/api/categories/', fn (Request $request, array $params): Response => $categoryController->index($request));
+$router->add('POST', '/api/categories/', fn (Request $request, array $params): Response => $categoryController->store($request));
+$router->add('GET', '/api/categories/{id}/', fn (Request $request, array $params): Response => $categoryController->show($request, $params));
+$router->add('PATCH', '/api/categories/{id}/', fn (Request $request, array $params): Response => $categoryController->update($request, $params));
+$router->add('PUT', '/api/categories/{id}/', fn (Request $request, array $params): Response => $categoryController->update($request, $params));
+$router->add('DELETE', '/api/categories/{id}/', fn (Request $request, array $params): Response => $categoryController->destroy($request, $params));
 
 return $router;
