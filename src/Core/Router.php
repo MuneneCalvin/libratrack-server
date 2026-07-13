@@ -35,7 +35,7 @@ final class Router
             try {
                 return ($route['handler'])($request, $params);
             } catch (ValidationException $exception) {
-                return Response::error($exception->getMessage(), $exception->statusCode);
+                return Response::error($exception->getMessage(), $exception->statusCode, $exception->extra);
             } catch (\Throwable) {
                 return Response::error('Internal server error', 500);
             }

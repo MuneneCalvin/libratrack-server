@@ -7,6 +7,7 @@ use LibraTrack\Controllers\BookController;
 use LibraTrack\Controllers\CategoryController;
 use LibraTrack\Controllers\MemberController;
 use LibraTrack\Controllers\SettingsController;
+use LibraTrack\Controllers\TransactionController;
 use LibraTrack\Core\Config;
 use LibraTrack\Core\Database;
 use LibraTrack\Core\Request;
@@ -16,9 +17,11 @@ use LibraTrack\Middleware\AuthMiddleware;
 use LibraTrack\Middleware\RoleMiddleware;
 use LibraTrack\Repositories\BookRepository;
 use LibraTrack\Repositories\CategoryRepository;
+use LibraTrack\Repositories\FineRepository;
 use LibraTrack\Repositories\MemberRepository;
 use LibraTrack\Repositories\RefreshTokenRepository;
 use LibraTrack\Repositories\SettingsRepository;
+use LibraTrack\Repositories\TransactionRepository;
 use LibraTrack\Repositories\UserRepository;
 use LibraTrack\Services\AuthService;
 use LibraTrack\Services\PasswordService;
@@ -36,11 +39,24 @@ $authService = new AuthService($users, $refreshTokens, $members, $passwords, $to
 $authMiddleware = new AuthMiddleware($tokens);
 $roleMiddleware = new RoleMiddleware();
 $auth = new AuthController($authService, $authMiddleware, $config->bool('COOKIE_SECURE', false));
-$settings = new SettingsController(new SettingsRepository($pdo));
+$settingsRepository = new SettingsRepository($pdo);
+$settings = new SettingsController($settingsRepository);
 $categoryRepository = new CategoryRepository($pdo);
 $categoryController = new CategoryController($categoryRepository, $authMiddleware, $roleMiddleware);
-$bookController = new BookController(new BookRepository($pdo), $categoryRepository, $authMiddleware, $roleMiddleware);
+$bookRepository = new BookRepository($pdo);
+$bookController = new BookController($bookRepository, $categoryRepository, $authMiddleware, $roleMiddleware);
 $memberController = new MemberController($members, $users, $passwords, $authMiddleware, $roleMiddleware);
+$transactionRepository = new TransactionRepository($pdo);
+$fineRepository = new FineRepository($pdo);
+$transactionController = new TransactionController(
+    $transactionRepository,
+    $fineRepository,
+    $members,
+    $bookRepository,
+    $settingsRepository,
+    $authMiddleware,
+    $roleMiddleware
+);
 
 $router = new Router();
 
@@ -78,5 +94,10 @@ $router->add('POST', '/api/members/', fn (Request $request, array $params): Resp
 $router->add('GET', '/api/members/{id}/', fn (Request $request, array $params): Response => $memberController->show($request, $params));
 $router->add('PATCH', '/api/members/{id}/', fn (Request $request, array $params): Response => $memberController->update($request, $params));
 $router->add('DELETE', '/api/members/{id}/', fn (Request $request, array $params): Response => $memberController->destroy($request, $params));
+$router->add('GET', '/api/transactions/', fn (Request $request, array $params): Response => $transactionController->index($request));
+$router->add('POST', '/api/transactions/', fn (Request $request, array $params): Response => $transactionController->store($request));
+$router->add('GET', '/api/transactions/{id}/', fn (Request $request, array $params): Response => $transactionController->show($request, $params));
+$router->add('POST', '/api/transactions/{id}/return/', fn (Request $request, array $params): Response => $transactionController->returnItems($request, $params));
+$router->add('GET', '/api/members/{id}/transactions/', fn (Request $request, array $params): Response => $transactionController->forMember($request, $params));
 
 return $router;
