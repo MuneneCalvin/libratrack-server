@@ -1,0 +1,31 @@
+{
+  "name": "libratrack/plain-php-backend",
+  "description": "Plain PHP backend for LibraTrack",
+  "type": "project",
+  "require": {
+    "php": "^8.2",
+    "ext-json": "*",
+    "ext-pdo": "*",
+    "ext-pdo_mysql": "*",
+    "firebase/php-jwt": "^6.10",
+    "vlucas/phpdotenv": "^5.6"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^11.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "LibraTrack\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "LibraTrack\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit",
+    "test:unit": "phpunit tests/Core tests/Services",
+    "test:feature": "phpunit tests/Feature"
+  }
+}

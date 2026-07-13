@@ -62,3 +62,6 @@ dmypy.json
 # Static / collected files
 staticfiles/
 static_root/
+/vendor/
+/.env
+/.phpunit.cache/
