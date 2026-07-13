@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use LibraTrack\Controllers\AuthController;
+use LibraTrack\Controllers\BookController;
 use LibraTrack\Controllers\CategoryController;
 use LibraTrack\Controllers\SettingsController;
 use LibraTrack\Core\Config;
@@ -12,6 +13,7 @@ use LibraTrack\Core\Response;
 use LibraTrack\Core\Router;
 use LibraTrack\Middleware\AuthMiddleware;
 use LibraTrack\Middleware\RoleMiddleware;
+use LibraTrack\Repositories\BookRepository;
 use LibraTrack\Repositories\CategoryRepository;
 use LibraTrack\Repositories\MemberRepository;
 use LibraTrack\Repositories\RefreshTokenRepository;
@@ -34,7 +36,9 @@ $authMiddleware = new AuthMiddleware($tokens);
 $roleMiddleware = new RoleMiddleware();
 $auth = new AuthController($authService, $authMiddleware, $config->bool('COOKIE_SECURE', false));
 $settings = new SettingsController(new SettingsRepository($pdo));
-$categoryController = new CategoryController(new CategoryRepository($pdo), $authMiddleware, $roleMiddleware);
+$categoryRepository = new CategoryRepository($pdo);
+$categoryController = new CategoryController($categoryRepository, $authMiddleware, $roleMiddleware);
+$bookController = new BookController(new BookRepository($pdo), $categoryRepository, $authMiddleware, $roleMiddleware);
 
 $router = new Router();
 
@@ -57,5 +61,11 @@ $router->add('GET', '/api/categories/{id}/', fn (Request $request, array $params
 $router->add('PATCH', '/api/categories/{id}/', fn (Request $request, array $params): Response => $categoryController->update($request, $params));
 $router->add('PUT', '/api/categories/{id}/', fn (Request $request, array $params): Response => $categoryController->update($request, $params));
 $router->add('DELETE', '/api/categories/{id}/', fn (Request $request, array $params): Response => $categoryController->destroy($request, $params));
+$router->add('GET', '/api/books/', fn (Request $request, array $params): Response => $bookController->index($request));
+$router->add('POST', '/api/books/', fn (Request $request, array $params): Response => $bookController->store($request));
+$router->add('GET', '/api/books/{id}/', fn (Request $request, array $params): Response => $bookController->show($request, $params));
+$router->add('PATCH', '/api/books/{id}/', fn (Request $request, array $params): Response => $bookController->update($request, $params));
+$router->add('PUT', '/api/books/{id}/', fn (Request $request, array $params): Response => $bookController->update($request, $params));
+$router->add('DELETE', '/api/books/{id}/', fn (Request $request, array $params): Response => $bookController->destroy($request, $params));
 
 return $router;
