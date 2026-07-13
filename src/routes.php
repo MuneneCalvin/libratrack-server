@@ -5,6 +5,7 @@ declare(strict_types=1);
 use LibraTrack\Controllers\AuthController;
 use LibraTrack\Controllers\BookController;
 use LibraTrack\Controllers\CategoryController;
+use LibraTrack\Controllers\MemberController;
 use LibraTrack\Controllers\SettingsController;
 use LibraTrack\Core\Config;
 use LibraTrack\Core\Database;
@@ -39,6 +40,7 @@ $settings = new SettingsController(new SettingsRepository($pdo));
 $categoryRepository = new CategoryRepository($pdo);
 $categoryController = new CategoryController($categoryRepository, $authMiddleware, $roleMiddleware);
 $bookController = new BookController(new BookRepository($pdo), $categoryRepository, $authMiddleware, $roleMiddleware);
+$memberController = new MemberController($members, $users, $passwords, $authMiddleware, $roleMiddleware);
 
 $router = new Router();
 
@@ -71,5 +73,10 @@ $router->add('PATCH', '/api/books/{id}/', fn (Request $request, array $params): 
 // unlike the Django reference's stricter, full-replace-required PUT). See README.md API Overview.
 $router->add('PUT', '/api/books/{id}/', fn (Request $request, array $params): Response => $bookController->update($request, $params));
 $router->add('DELETE', '/api/books/{id}/', fn (Request $request, array $params): Response => $bookController->destroy($request, $params));
+$router->add('GET', '/api/members/', fn (Request $request, array $params): Response => $memberController->index($request));
+$router->add('POST', '/api/members/', fn (Request $request, array $params): Response => $memberController->store($request));
+$router->add('GET', '/api/members/{id}/', fn (Request $request, array $params): Response => $memberController->show($request, $params));
+$router->add('PATCH', '/api/members/{id}/', fn (Request $request, array $params): Response => $memberController->update($request, $params));
+$router->add('DELETE', '/api/members/{id}/', fn (Request $request, array $params): Response => $memberController->destroy($request, $params));
 
 return $router;

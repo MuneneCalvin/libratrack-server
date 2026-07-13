@@ -66,4 +66,10 @@ final class UserRepository
         );
         $statement->execute([$passwordHash, $id]);
     }
+
+    public function setActive(int $id, bool $isActive): void
+    {
+        $statement = $this->pdo->prepare('UPDATE users SET is_active = ? WHERE id = ?');
+        $statement->execute([$isActive ? 1 : 0, $id]);
+    }
 }
