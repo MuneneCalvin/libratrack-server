@@ -139,7 +139,7 @@ file rewrites `/api` routes to `public/index.php`.
 
 ## Demo Credentials
 
-Created by `python manage.py seed`:
+Created by `php database/seed.php`:
 
 | Role | Email | Password |
 |---|---|---|
@@ -155,65 +155,50 @@ Created by `python manage.py seed`:
 To clear local data and rebuild the demo state:
 
 ```bash
-python manage.py flush --no-input
-python manage.py migrate
-python manage.py seed
-python manage.py import_openlibrary_books --limit 500 --copies 50
+php database/migrate.php down
+php database/migrate.php
+php database/seed.php
 ```
 
-Skip the import command if you only need the small baseline catalog.
-
----
-
-## Environment Variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `SECRET_KEY` | `dev-secret-key-change-in-production` | Django signing key; override outside local development |
-| `DEBUG` | `False` | Enables Django debug mode |
-| `DATABASE_NAME` | `libratrack` | MySQL schema name |
-| `DATABASE_USER` | `libratrack_user` | MySQL username |
-| `DATABASE_PASSWORD` | `libratrack_pass` | MySQL password |
-| `DATABASE_HOST` | `localhost` | MySQL host |
-| `DATABASE_PORT` | `3306` | MySQL port |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated allowed frontend origins |
-| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Comma-separated Django hostnames |
-
-For temporary tunnel testing, add the public tunnel origin to
-`CORS_ALLOWED_ORIGINS` and the tunnel hostname to `ALLOWED_HOSTS` if the backend
-is exposed directly. If the frontend proxies `/api` to the local backend, the
-backend can usually keep `localhost,127.0.0.1`.
+Open Library import is not implemented yet for the PHP backend (planned for a
+later phase); see Known Deferred Work below.
 
 ---
 
 ## Project Structure
 
+> Reflects Phase 1 (core + auth + settings) only. Additional `src/Controllers`,
+> `src/Repositories`, and `src/Services` files will be added as later phases
+> implement books, members, transactions, reservations, fines, notifications,
+> and reports.
+
 ```text
-apps/
-├── auth_app/        Users, roles, JWT tokens, refresh tokens, signup
-├── books/           Catalog, Open Library importer, book metadata
-├── categories/      Dynamic book categories
-├── members/         Member profiles and member-scoped history
-├── transactions/    Borrow and return records
-├── reservations/    Book reservation lifecycle
-├── fines/           Paid, unpaid, and waived fines
-├── notifications/   In-app notifications and reminders
-├── reports/         Summary, inventory, borrowing, fines, members, export
-└── settings_app/    Configurable library rules
+public/
+├── index.php        Front controller
+└── .htaccess        Apache/XAMPP rewrite to index.php
 
-libratrack/
-├── settings/
-│   ├── base.py      Shared settings
-│   ├── dev.py       Local development settings
-│   └── test.py      Test settings
-└── urls.py          Root API routing
+src/
+├── Core/            Config, Database, Request, Response, Router, App
+├── Middleware/       AuthMiddleware, RoleMiddleware
+├── Controllers/      AuthController, SettingsController
+├── Repositories/      UserRepository, RefreshTokenRepository, MemberRepository, SettingsRepository
+├── Services/         PasswordService, TokenService, AuthService
+└── routes.php        Route table
 
-shared/
-├── pagination.py    Standard pagination response
-└── response.py      Response envelope and exception handler
+database/
+├── migrations/       PHP migration files
+├── migrate.php       Migration runner
+└── seed.php          Demo data seeder
 
-tests/               pytest test suite
+tests/
+├── Core/             Core class unit tests
+├── Services/         Service unit tests
+└── Feature/          Endpoint integration tests
 ```
+
+The Django backend (`apps/`, `libratrack/`, `manage.py`, pytest `tests/`)
+remains in this repo as behavior reference during the rewrite and will be
+removed once PHP reaches full contract parity.
 
 ---
 
@@ -261,7 +246,11 @@ can include `activeBorrowCount`, `maxBooks`, and `remainingSlots`.
 
 ## API Overview
 
-All endpoints are prefixed with `/api`.
+All endpoints are prefixed with `/api`. This documents the full target contract
+carried over from the Django backend; only **Authentication** and
+**Settings and Notifications → `/settings/`** are implemented in the PHP
+backend as of Phase 1. The remaining sections describe work planned for later
+phases (see Known Deferred Work).
 
 ### Authentication
 
@@ -424,3 +413,20 @@ vendor/bin/phpunit tests/Feature/AuthEndpointTest.php
 | `DATABASE_HOST` | `localhost` | MySQL host |
 | `DATABASE_PORT` | `3306` | MySQL port |
 | `COOKIE_SECURE` | `false` | Set to `true` in production with HTTPS |
+
+---
+
+## Known Deferred Work
+
+Phase 1 (this state) covers core HTTP plumbing, auth, and settings only. Not
+yet implemented in the PHP backend:
+
+- Books, categories, Open Library import.
+- Members list/detail/manual creation beyond auth signup.
+- Transactions, returns, reservations, fines, notifications, reports.
+- Wiring `AuthMiddleware`/`RoleMiddleware` into route-level auth/role checks
+  (classes exist; routes currently do inline checks in controllers).
+- Final removal of the Django backend files.
+
+See `docs/superpowers/specs/2026-07-13-php-backend-rewrite-design.md` and the
+phase plans under `docs/superpowers/plans/` for the full roadmap.
