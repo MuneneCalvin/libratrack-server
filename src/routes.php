@@ -59,12 +59,16 @@ $router->add('GET', '/api/categories/', fn (Request $request, array $params): Re
 $router->add('POST', '/api/categories/', fn (Request $request, array $params): Response => $categoryController->store($request));
 $router->add('GET', '/api/categories/{id}/', fn (Request $request, array $params): Response => $categoryController->show($request, $params));
 $router->add('PATCH', '/api/categories/{id}/', fn (Request $request, array $params): Response => $categoryController->update($request, $params));
+// PUT is intentionally aliased to the same partial-update handler as PATCH (deliberate simplification;
+// unlike the Django reference's stricter, full-replace-required PUT). See README.md API Overview.
 $router->add('PUT', '/api/categories/{id}/', fn (Request $request, array $params): Response => $categoryController->update($request, $params));
 $router->add('DELETE', '/api/categories/{id}/', fn (Request $request, array $params): Response => $categoryController->destroy($request, $params));
 $router->add('GET', '/api/books/', fn (Request $request, array $params): Response => $bookController->index($request));
 $router->add('POST', '/api/books/', fn (Request $request, array $params): Response => $bookController->store($request));
 $router->add('GET', '/api/books/{id}/', fn (Request $request, array $params): Response => $bookController->show($request, $params));
 $router->add('PATCH', '/api/books/{id}/', fn (Request $request, array $params): Response => $bookController->update($request, $params));
+// PUT is intentionally aliased to the same partial-update handler as PATCH (deliberate simplification;
+// unlike the Django reference's stricter, full-replace-required PUT). See README.md API Overview.
 $router->add('PUT', '/api/books/{id}/', fn (Request $request, array $params): Response => $bookController->update($request, $params));
 $router->add('DELETE', '/api/books/{id}/', fn (Request $request, array $params): Response => $bookController->destroy($request, $params));
 

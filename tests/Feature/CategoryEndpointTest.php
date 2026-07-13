@@ -14,6 +14,7 @@ final class CategoryEndpointTest extends TestCase
     private static \PDO $pdo;
     private static string $memberToken;
     private static string $adminToken;
+    private static string $librarianToken;
 
     public static function setUpBeforeClass(): void
     {
@@ -21,8 +22,8 @@ final class CategoryEndpointTest extends TestCase
         self::$pdo = Database::fromConfig($config)->pdo();
 
         $passwords = new PasswordService();
-        self::$pdo->prepare('DELETE FROM users WHERE email IN (?, ?)')
-            ->execute(['category-test-member@libratrack.com', 'category-test-admin@libratrack.com']);
+        self::$pdo->prepare('DELETE FROM users WHERE email IN (?, ?, ?)')
+            ->execute(['category-test-member@libratrack.com', 'category-test-admin@libratrack.com', 'category-test-librarian@libratrack.com']);
 
         $roleId = fn (string $role): int => (int) self::$pdo->query("SELECT id FROM roles WHERE name = '{$role}'")->fetchColumn();
 
@@ -31,10 +32,13 @@ final class CategoryEndpointTest extends TestCase
         $memberId = (int) self::$pdo->lastInsertId();
         $insert->execute([$roleId('admin'), 'category-test-admin@libratrack.com', $passwords->hash('x')]);
         $adminId = (int) self::$pdo->lastInsertId();
+        $insert->execute([$roleId('librarian'), 'category-test-librarian@libratrack.com', $passwords->hash('x')]);
+        $librarianId = (int) self::$pdo->lastInsertId();
 
         $tokens = new TokenService($config);
         self::$memberToken = $tokens->issueAccessToken(['id' => $memberId, 'email' => 'category-test-member@libratrack.com', 'role' => 'member']);
         self::$adminToken = $tokens->issueAccessToken(['id' => $adminId, 'email' => 'category-test-admin@libratrack.com', 'role' => 'admin']);
+        self::$librarianToken = $tokens->issueAccessToken(['id' => $librarianId, 'email' => 'category-test-librarian@libratrack.com', 'role' => 'librarian']);
     }
 
     private function router(): \LibraTrack\Core\Router
@@ -139,5 +143,22 @@ final class CategoryEndpointTest extends TestCase
         $delete = $router->dispatch(new Request('DELETE', "/api/categories/{$categoryId}/", [], $headers, [], null));
 
         $this->assertSame(400, $delete->statusCode);
+    }
+
+    public function testLibrarianCannotDeleteCategory(): void
+    {
+        $router = $this->router();
+        $adminHeaders = ['authorization' => 'Bearer ' . self::$adminToken, 'content-type' => 'application/json'];
+        $name = 'Librarian Delete Test Category ' . bin2hex(random_bytes(4));
+
+        $create = $router->dispatch(new Request('POST', '/api/categories/', [], $adminHeaders, [], ['name' => $name]));
+        $this->assertSame(201, $create->statusCode);
+        $id = $create->payload['data']['id'];
+
+        $librarianHeaders = ['authorization' => 'Bearer ' . self::$librarianToken, 'content-type' => 'application/json'];
+        $delete = $router->dispatch(new Request('DELETE', "/api/categories/{$id}/", [], $librarianHeaders, [], null));
+        $this->assertSame(403, $delete->statusCode);
+
+        $router->dispatch(new Request('DELETE', "/api/categories/{$id}/", [], $adminHeaders, [], null));
     }
 }

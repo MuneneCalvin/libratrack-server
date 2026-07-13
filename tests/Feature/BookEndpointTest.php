@@ -14,6 +14,7 @@ final class BookEndpointTest extends TestCase
     private static \PDO $pdo;
     private static string $memberToken;
     private static string $adminToken;
+    private static string $librarianToken;
     private static int $categoryId;
 
     public static function setUpBeforeClass(): void
@@ -22,8 +23,8 @@ final class BookEndpointTest extends TestCase
         self::$pdo = Database::fromConfig($config)->pdo();
 
         $passwords = new PasswordService();
-        self::$pdo->prepare('DELETE FROM users WHERE email IN (?, ?)')
-            ->execute(['book-test-member@libratrack.com', 'book-test-admin@libratrack.com']);
+        self::$pdo->prepare('DELETE FROM users WHERE email IN (?, ?, ?)')
+            ->execute(['book-test-member@libratrack.com', 'book-test-admin@libratrack.com', 'book-test-librarian@libratrack.com']);
 
         $roleId = fn (string $role): int => (int) self::$pdo->query("SELECT id FROM roles WHERE name = '{$role}'")->fetchColumn();
 
@@ -32,10 +33,13 @@ final class BookEndpointTest extends TestCase
         $memberId = (int) self::$pdo->lastInsertId();
         $insert->execute([$roleId('admin'), 'book-test-admin@libratrack.com', $passwords->hash('x')]);
         $adminId = (int) self::$pdo->lastInsertId();
+        $insert->execute([$roleId('librarian'), 'book-test-librarian@libratrack.com', $passwords->hash('x')]);
+        $librarianId = (int) self::$pdo->lastInsertId();
 
         $tokens = new TokenService($config);
         self::$memberToken = $tokens->issueAccessToken(['id' => $memberId, 'email' => 'book-test-member@libratrack.com', 'role' => 'member']);
         self::$adminToken = $tokens->issueAccessToken(['id' => $adminId, 'email' => 'book-test-admin@libratrack.com', 'role' => 'admin']);
+        self::$librarianToken = $tokens->issueAccessToken(['id' => $librarianId, 'email' => 'book-test-librarian@libratrack.com', 'role' => 'librarian']);
 
         $categoryName = 'Book Test Category ' . bin2hex(random_bytes(4));
         self::$pdo->prepare('INSERT INTO categories (name) VALUES (?)')->execute([$categoryName]);
@@ -155,5 +159,102 @@ final class BookEndpointTest extends TestCase
         $response = $this->router()->dispatch(new Request('GET', '/api/books/999999999/', [], ['authorization' => 'Bearer ' . self::$adminToken], [], null));
 
         $this->assertSame(404, $response->statusCode);
+    }
+
+    public function testLibrarianCannotDeleteBook(): void
+    {
+        $router = $this->router();
+        $adminHeaders = ['authorization' => 'Bearer ' . self::$adminToken, 'content-type' => 'application/json'];
+
+        $create = $router->dispatch(new Request('POST', '/api/books/', [], $adminHeaders, [], [
+            'title' => 'Librarian Delete Test Book',
+            'author' => 'Someone',
+            'isbn' => 'ISBN-' . bin2hex(random_bytes(6)),
+            'categoryId' => self::$categoryId,
+        ]));
+        $this->assertSame(201, $create->statusCode);
+        $id = $create->payload['data']['id'];
+
+        $librarianHeaders = ['authorization' => 'Bearer ' . self::$librarianToken, 'content-type' => 'application/json'];
+        $delete = $router->dispatch(new Request('DELETE', "/api/books/{$id}/", [], $librarianHeaders, [], null));
+        $this->assertSame(403, $delete->statusCode);
+
+        $router->dispatch(new Request('DELETE', "/api/books/{$id}/", [], $adminHeaders, [], null));
+    }
+
+    public function testCreatedAtAndUpdatedAtArePresent(): void
+    {
+        $router = $this->router();
+        $headers = ['authorization' => 'Bearer ' . self::$adminToken, 'content-type' => 'application/json'];
+
+        $create = $router->dispatch(new Request('POST', '/api/books/', [], $headers, [], [
+            'title' => 'Timestamp Test Book',
+            'author' => 'Someone',
+            'isbn' => 'ISBN-' . bin2hex(random_bytes(6)),
+            'categoryId' => self::$categoryId,
+        ]));
+        $this->assertSame(201, $create->statusCode);
+        $id = $create->payload['data']['id'];
+
+        $this->assertIsString($create->payload['data']['createdAt']);
+        $this->assertNotSame('', $create->payload['data']['createdAt']);
+        $this->assertIsString($create->payload['data']['updatedAt']);
+        $this->assertNotSame('', $create->payload['data']['updatedAt']);
+
+        $get = $router->dispatch(new Request('GET', "/api/books/{$id}/", [], $headers, [], null));
+        $this->assertSame(200, $get->statusCode);
+        $this->assertIsString($get->payload['data']['createdAt']);
+        $this->assertNotSame('', $get->payload['data']['createdAt']);
+        $this->assertIsString($get->payload['data']['updatedAt']);
+        $this->assertNotSame('', $get->payload['data']['updatedAt']);
+
+        $router->dispatch(new Request('DELETE', "/api/books/{$id}/", [], $headers, [], null));
+    }
+
+    public function testSortByRatingOrdersDescendingWithNullsLast(): void
+    {
+        $router = $this->router();
+        $headers = ['authorization' => 'Bearer ' . self::$adminToken, 'content-type' => 'application/json'];
+        $suffix = bin2hex(random_bytes(4));
+
+        $high = $router->dispatch(new Request('POST', '/api/books/', [], $headers, [], [
+            'title' => "Rating Sort High {$suffix}", 'author' => 'A', 'isbn' => 'ISBN-' . bin2hex(random_bytes(6)),
+            'categoryId' => self::$categoryId,
+        ]));
+        $highId = $high->payload['data']['id'];
+
+        $low = $router->dispatch(new Request('POST', '/api/books/', [], $headers, [], [
+            'title' => "Rating Sort Low {$suffix}", 'author' => 'A', 'isbn' => 'ISBN-' . bin2hex(random_bytes(6)),
+            'categoryId' => self::$categoryId,
+        ]));
+        $lowId = $low->payload['data']['id'];
+
+        $null = $router->dispatch(new Request('POST', '/api/books/', [], $headers, [], [
+            'title' => "Rating Sort Null {$suffix}", 'author' => 'A', 'isbn' => 'ISBN-' . bin2hex(random_bytes(6)),
+            'categoryId' => self::$categoryId,
+        ]));
+        $nullId = $null->payload['data']['id'];
+
+        self::$pdo->prepare('UPDATE books SET rating_average = ? WHERE id = ?')->execute([4.8, $highId]);
+        self::$pdo->prepare('UPDATE books SET rating_average = ? WHERE id = ?')->execute([2.1, $lowId]);
+        self::$pdo->prepare('UPDATE books SET rating_average = NULL WHERE id = ?')->execute([$nullId]);
+
+        $response = $router->dispatch(new Request('GET', '/api/books/', ['sort' => 'rating', 'q' => "Rating Sort", 'limit' => '50'], $headers, [], null));
+        $this->assertSame(200, $response->statusCode);
+
+        $ids = array_column($response->payload['data'], 'id');
+        $highPos = array_search($highId, $ids, true);
+        $lowPos = array_search($lowId, $ids, true);
+        $nullPos = array_search($nullId, $ids, true);
+
+        $this->assertNotFalse($highPos);
+        $this->assertNotFalse($lowPos);
+        $this->assertNotFalse($nullPos);
+        $this->assertLessThan($lowPos, $highPos, 'Higher rated book should sort before lower rated book');
+        $this->assertLessThan($nullPos, $lowPos, 'Rated book should sort before null-rated book');
+
+        $router->dispatch(new Request('DELETE', "/api/books/{$highId}/", [], $headers, [], null));
+        $router->dispatch(new Request('DELETE', "/api/books/{$lowId}/", [], $headers, [], null));
+        $router->dispatch(new Request('DELETE', "/api/books/{$nullId}/", [], $headers, [], null));
     }
 }

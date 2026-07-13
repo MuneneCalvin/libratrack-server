@@ -162,7 +162,18 @@ final class BookController
             'wantToReadCount' => (int) $row['want_to_read_count'],
             'currentlyReadingCount' => (int) $row['currently_reading_count'],
             'alreadyReadCount' => (int) $row['already_read_count'],
+            'createdAt' => $this->toIso8601($row['created_at']),
+            'updatedAt' => $this->toIso8601($row['updated_at']),
         ];
+    }
+
+    private function toIso8601(?string $timestamp): ?string
+    {
+        if ($timestamp === null) {
+            return null;
+        }
+
+        return (new \DateTimeImmutable($timestamp))->format(\DateTimeInterface::ATOM);
     }
 
     private function fromFrontendRow(array $row): array

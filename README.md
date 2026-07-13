@@ -275,12 +275,20 @@ phases (see Known Deferred Work).
 | POST | `/books/` | Create a book |
 | GET | `/books/{id}/` | Retrieve a book |
 | PATCH | `/books/{id}/` | Update a book |
+| PUT | `/books/{id}/` | Update a book (see PUT/PATCH note below) |
 | DELETE | `/books/{id}/` | Delete a book |
 | GET | `/categories/` | List categories with book counts |
 | POST | `/categories/` | Create a category |
 | GET | `/categories/{id}/` | Retrieve a category |
 | PATCH | `/categories/{id}/` | Update a category |
+| PUT | `/categories/{id}/` | Update a category (see PUT/PATCH note below) |
 | DELETE | `/categories/{id}/` | Delete a category |
+
+> **PUT/PATCH note:** for both books and categories, `PUT` and `PATCH` behave
+> identically here — both perform a partial update (only the fields present in
+> the request body are changed). This is a deliberate simplification versus
+> the Django reference implementation, whose `PUT` requires every writable
+> field to be present and rejects an incomplete body with 400.
 
 ### Members
 
