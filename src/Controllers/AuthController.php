@@ -7,14 +7,14 @@ namespace LibraTrack\Controllers;
 use LibraTrack\Core\Request;
 use LibraTrack\Core\Response;
 use LibraTrack\Core\ValidationException;
+use LibraTrack\Middleware\AuthMiddleware;
 use LibraTrack\Services\AuthService;
-use LibraTrack\Services\TokenService;
 
 final class AuthController
 {
     public function __construct(
         private readonly AuthService $auth,
-        private readonly TokenService $tokens,
+        private readonly AuthMiddleware $authMiddleware,
         private readonly bool $secureCookie
     ) {
     }
@@ -54,13 +54,13 @@ final class AuthController
 
     public function me(Request $request): Response
     {
-        $payload = $this->requirePayload($request);
+        $payload = $this->authMiddleware->authenticate($request);
         return Response::success($this->auth->currentUser((int) $payload['sub']));
     }
 
     public function updateMe(Request $request): Response
     {
-        $payload = $this->requirePayload($request);
+        $payload = $this->authMiddleware->authenticate($request);
         $email = (string) ($request->json['email'] ?? '');
         if ($email === '') {
             throw new ValidationException('email is required');
@@ -70,7 +70,7 @@ final class AuthController
 
     public function changePassword(Request $request): Response
     {
-        $payload = $this->requirePayload($request);
+        $payload = $this->authMiddleware->authenticate($request);
         $this->auth->changePassword((int) $payload['sub'], (string) ($request->json['password'] ?? ''));
         return Response::success(null);
     }
@@ -87,15 +87,6 @@ final class AuthController
             200,
             ['Set-Cookie' => $this->cookieHeader($session['refreshToken'])]
         );
-    }
-
-    private function requirePayload(Request $request): array
-    {
-        $token = $request->bearerToken();
-        if ($token === null) {
-            throw new ValidationException('Authentication required', 401);
-        }
-        return $this->tokens->decodeAccessToken($token);
     }
 
     private function cookieHeader(string $token): string
