@@ -141,4 +141,47 @@ final class OpenLibraryNormalizerTest extends TestCase
 
         $this->assertSame('A book about writing clean code.', $enriched['synopsis']);
     }
+
+    public function testEnrichDoesNotMisclassifyLongSynopsisMentioningCmOrPages(): void
+    {
+        $candidateHeight = ['subjects' => [], 'synopsis' => null];
+        $workHeight = ['description' => 'She grew to be over 190 cm tall in this fantasy epic.'];
+
+        $enrichedHeight = OpenLibraryNormalizer::enrichWithWorkDetails($candidateHeight, $workHeight);
+
+        $this->assertSame('She grew to be over 190 cm tall in this fantasy epic.', $enrichedHeight['synopsis']);
+
+        $candidateWall = ['subjects' => [], 'synopsis' => null];
+        $workWall = ['description' => 'The wall stood 3 cm thick, a marvel of engineering fiction.'];
+
+        $enrichedWall = OpenLibraryNormalizer::enrichWithWorkDetails($candidateWall, $workWall);
+
+        $this->assertSame('The wall stood 3 cm thick, a marvel of engineering fiction.', $enrichedWall['synopsis']);
+    }
+
+    public function testEnrichStillTreatsRealPhysicalDescriptionAsNonSynopsis(): void
+    {
+        $candidate = ['subjects' => [], 'synopsis' => null];
+        $work = ['description' => 'ix, 340 pages : 20 cm', 'first_sentence' => ['value' => 'Fallback synopsis.']];
+
+        $enriched = OpenLibraryNormalizer::enrichWithWorkDetails($candidate, $work);
+
+        $this->assertSame('Fallback synopsis.', $enriched['synopsis']);
+    }
+
+    public function testNormalizeExtractsTitleAndPublisherFromMultiElementArrayWithBlankFirstEntry(): void
+    {
+        $doc = [
+            'title' => ['', 'Real Title'],
+            'author_name' => ['A'],
+            'isbn' => ['9780132350884'],
+            'publisher' => ['', 'Real Publisher'],
+        ];
+
+        $candidate = OpenLibraryNormalizer::normalize($doc, 'Fiction');
+
+        $this->assertNotNull($candidate);
+        $this->assertSame('Real Title', $candidate['title']);
+        $this->assertSame('Real Publisher', $candidate['publisher']);
+    }
 }

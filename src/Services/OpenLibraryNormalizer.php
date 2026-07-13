@@ -132,8 +132,8 @@ final class OpenLibraryNormalizer
 
     private static function looksLikePhysicalDescription(string $text): bool
     {
-        return preg_match('/^\s*[ivxlc]*,?\s*\d+\s*(pages?|p\.)/i', $text) === 1
-            || preg_match('/\d+\s*cm\b/i', $text) === 1;
+        return mb_strlen($text) < 160
+            && preg_match('/\b(\d+\s*)?(pages?|p\.)\b.*\bcm\b/i', $text) === 1;
     }
 
     private static function normalizeWorkKey(mixed $key): ?string
@@ -154,7 +154,17 @@ final class OpenLibraryNormalizer
     private static function firstText(mixed $value, int $maxLength): ?string
     {
         if (is_array($value)) {
-            $value = $value[0] ?? null;
+            foreach ($value as $item) {
+                if (!is_string($item)) {
+                    continue;
+                }
+                $trimmed = trim($item);
+                if ($trimmed !== '') {
+                    return self::truncate($trimmed, $maxLength);
+                }
+            }
+
+            return null;
         }
         if (!is_string($value)) {
             return null;
