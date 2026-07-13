@@ -389,6 +389,27 @@ Supported export reports: `borrowing`, `inventory`, `fines`, `members`,
 | `php database/migrate.php` | Create core auth and settings tables |
 | `php database/seed.php` | Create demo roles, accounts, and library settings |
 
+## Open Library Import
+
+```bash
+php scripts/import_openlibrary_books.php --limit=500 --copies=50
+```
+
+Reliability options:
+
+```bash
+php scripts/import_openlibrary_books.php --limit=500 --copies=50 --skip-work-details --timeout=60 --retries=6 --page-size=25
+```
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--limit` | 500 | Total books to import across all topics |
+| `--copies` | 50 | Copies created per imported book |
+| `--page-size` | 50 | Results per Open Library API page |
+| `--timeout` | 30 | HTTP timeout in seconds |
+| `--retries` | 5 | Retry attempts per page fetch |
+| `--skip-work-details` | off | Skip per-work synopsis/subject enrichment for a faster import |
+
 ---
 
 ## Running Tests
