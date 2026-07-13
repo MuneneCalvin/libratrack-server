@@ -1,6 +1,40 @@
-# Book Tracking System — Backend Usage Guide
+# LibraTrack Backend — API Usage Guide
 
-This guide covers the day-to-day operations of the API: how to interact with each endpoint, what data is expected, and what responses to expect.
+This guide covers how to run the API and interact with each endpoint.
+
+---
+
+## Getting Started (PHP)
+
+### 1. Install dependencies
+```bash
+composer install
+```
+
+### 2. Configure environment
+```bash
+cp .env.example .env
+```
+
+### 3. Create MySQL database
+```sql
+CREATE DATABASE libratrack CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'libratrack_user'@'localhost' IDENTIFIED BY 'libratrack_pass';
+GRANT ALL PRIVILEGES ON libratrack.* TO 'libratrack_user'@'localhost';
+```
+
+### 4. Run migrations and seed
+```bash
+php database/migrate.php
+php database/seed.php
+```
+
+### 5. Start the server
+```bash
+php -S localhost:8000 -t public
+```
+
+The API will be available at `http://localhost:8000/api/`
 
 ---
 
@@ -406,25 +440,27 @@ curl http://localhost:8000/api/settings/ \
 {
   "status": "success",
   "data": {
-    "fine_rate_per_day": "50.00",
-    "max_borrow_days": "14",
-    "max_books_per_member": "5",
-    "reservation_expiry_days": "7"
+    "fineRatePerDay": 10.0,
+    "borrowDays": 14,
+    "maxBooksPerMember": 5,
+    "reservationExpiryDays": 3
   }
 }
 ```
 
-### Update settings (admin only)
+### Update settings
 
 ```bash
 curl -X PATCH http://localhost:8000/api/settings/ \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
-    "fine_rate_per_day": "75.00",
-    "max_borrow_days": "21"
+    "fineRatePerDay": 15.0,
+    "borrowDays": 21
   }'
 ```
+
+Both PATCH and PUT methods are supported.
 
 ---
 
@@ -449,39 +485,17 @@ All errors follow the same shape:
 ## Running Tests
 
 ```bash
-source venv/bin/activate
-pytest -v
+vendor/bin/phpunit
 ```
 
-Run a specific file:
+Run a specific test file:
 
 ```bash
-pytest tests/test_books.py -v
+vendor/bin/phpunit tests/Feature/AuthEndpointTest.php
 ```
 
-The test settings use SQLite so no MySQL connection is required when testing.
-
----
-
-## Management Commands
-
-### Seed the database
-
-Populates roles, a default admin user, sample books, members, and categories:
+Run a specific test method:
 
 ```bash
-python seed.py
-```
-
-### Apply migrations
-
-```bash
-python manage.py migrate
-```
-
-### Create a migration after model changes
-
-```bash
-python manage.py makemigrations <app_name>
-python manage.py migrate
+vendor/bin/phpunit --filter testLoginRouteReturnsFrontendEnvelopeShape
 ```

@@ -47,42 +47,22 @@ own account.
 
 ## Prerequisites
 
-- Python 3.11 or later.
+- PHP 8.2 or later.
+- Composer (PHP package manager).
 - MySQL 8.0 or later.
 - A MySQL database and user with privileges on that database.
-- Internet access only if you want to import books from Open Library.
 
 ---
 
-## Local Setup
+## Local Setup (PHP)
 
-### 1. Create and activate a virtual environment
-
-```bash
-python -m venv venv
-source venv/bin/activate
-```
-
-On Windows:
+### 1. Install dependencies
 
 ```bash
-venv\Scripts\activate
+composer install
 ```
 
-### 2. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-If your MySQL account uses `caching_sha2_password` and PyMySQL reports that the
-`cryptography` package is required, install it in the same virtual environment:
-
-```bash
-pip install cryptography
-```
-
-### 3. Configure environment
+### 2. Configure environment
 
 ```bash
 cp .env.example .env
@@ -92,17 +72,15 @@ Example local `.env`:
 
 ```env
 SECRET_KEY=dev-secret-key-change-in-production
-DEBUG=True
 DATABASE_NAME=libratrack
 DATABASE_USER=libratrack_user
 DATABASE_PASSWORD=libratrack_pass
 DATABASE_HOST=localhost
 DATABASE_PORT=3306
-CORS_ALLOWED_ORIGINS=http://localhost:5173
-ALLOWED_HOSTS=localhost,127.0.0.1
+COOKIE_SECURE=false
 ```
 
-### 4. Create the local MySQL database
+### 3. Create the local MySQL database
 
 ```sql
 CREATE DATABASE libratrack CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -117,16 +95,16 @@ ALTER USER 'libratrack_user'@'localhost' IDENTIFIED BY 'libratrack_pass';
 GRANT ALL PRIVILEGES ON libratrack.* TO 'libratrack_user'@'localhost';
 ```
 
-### 5. Run migrations
+### 4. Run migrations
 
 ```bash
-python manage.py migrate
+php database/migrate.php
 ```
 
-### 6. Seed baseline demo data
+### 5. Seed baseline demo data
 
 ```bash
-python manage.py seed
+php database/seed.php
 ```
 
 The seed command creates the small demo dataset needed to log in and test the
@@ -137,52 +115,12 @@ main workflows:
 | Roles | 3 | `admin`, `librarian`, `member` |
 | Staff accounts | 2 | Admin and librarian |
 | Member accounts | 2 | Alice and Bob |
-| Categories | 6 | Fiction, Non-Fiction, Science, History, Technology, Arts |
-| Books | 10 | Baseline manually curated titles |
 | Library settings | 4 | Fine rate, borrow days, book limit, reservation expiry |
-| Transactions | 2 | One active borrow and one returned late transaction |
-| Fines | 1 | Late-return fine |
-| Reservations | 1 | Pending reservation |
-| Notifications | 3 | Borrow, fine, and reservation examples |
 
-### 7. Optional: import 500 Open Library books
+### 6. Start the built-in PHP server
 
 ```bash
-python manage.py import_openlibrary_books --limit 500 --copies 50
-```
-
-If Open Library is slow or Python networking times out on Windows, use the
-curl-backed importer with a smaller page size:
-
-```bash
-python manage.py import_openlibrary_books --limit 500 --copies 50 --skip-work-details --http-client curl --timeout 60 --retries 6 --page-size 25
-```
-
-This imports book records into the local `books` table. The frontend does not
-call Open Library directly during browsing; it reads the imported records from
-`/api/books/`.
-
-Imported fields include:
-
-- Title, author, ISBN, publisher, published year, category.
-- `total_copies = 50` and `available_copies = 50`.
-- Cover URL.
-- Open Library work key.
-- Synopsis when available.
-- Subjects/tags.
-- Language codes.
-- Edition count.
-- Rating average and rating count.
-- Want-to-read, currently-reading, and already-read popularity counts.
-
-The importer skips invalid records and duplicate ISBNs. It fetches search results
-by topic and, unless `--skip-work-details` is passed, fetches work-level details
-for richer synopsis and subject data.
-
-### 8. Start the API server
-
-```bash
-python manage.py runserver
+php -S localhost:8000 -t public
 ```
 
 The API will be available at:
@@ -190,6 +128,12 @@ The API will be available at:
 ```text
 http://localhost:8000/api/
 ```
+
+### 7. Apache/XAMPP Alternative
+
+If serving from Apache/XAMPP, point the document root to the `public/` directory
+when possible. If you must serve from the project root, the `public/.htaccess`
+file rewrites `/api` routes to `public/index.php`.
 
 ---
 
@@ -446,84 +390,37 @@ Supported export reports: `borrowing`, `inventory`, `fines`, `members`,
 
 ---
 
-## Management Commands
+## Database Commands
 
 | Command | Description |
 |---|---|
-| `python manage.py seed` | Create demo roles, accounts, baseline books, settings, transactions, fines, reservations, and notifications |
-| `python manage.py import_openlibrary_books --limit 500 --copies 50` | Import Open Library books into the local catalog |
-| `python manage.py import_openlibrary_books --limit 500 --copies 50 --skip-work-details --http-client curl --timeout 60 --retries 6 --page-size 25` | More reliable import for slow Open Library responses or Windows networking timeouts |
-| `python manage.py mark_overdue` | Mark active transactions past due date as overdue |
-
-Run `mark_overdue` on a schedule in a longer-lived environment so overdue status
-stays accurate.
+| `php database/migrate.php` | Create core auth and settings tables |
+| `php database/seed.php` | Create demo roles, accounts, and library settings |
 
 ---
 
 ## Running Tests
 
 ```bash
-pytest
+vendor/bin/phpunit
 ```
 
 Run a focused file:
 
 ```bash
-pytest tests/test_transactions.py -v
+vendor/bin/phpunit tests/Feature/AuthEndpointTest.php
 ```
-
-Tests use the SQLite-backed test settings in `libratrack/settings/test.py`, so a
-local MySQL database is not required for the test suite.
 
 ---
 
-## Docker
+## Environment Variables (PHP Runtime)
 
-The repo includes a `Dockerfile` and `docker-compose.yml` with:
-
-| Service | Purpose | Port |
+| Variable | Default | Description |
 |---|---|---|
-| `db` | MySQL database | 3306 |
-| `web` | Django API | 8000 |
-
-Create `.env` for Docker:
-
-```env
-SECRET_KEY=dev-secret-key-change-in-production
-DEBUG=True
-DATABASE_NAME=libratrack
-DATABASE_USER=libratrack_user
-DATABASE_PASSWORD=libratrack_pass
-DATABASE_HOST=db
-DATABASE_PORT=3306
-CORS_ALLOWED_ORIGINS=http://localhost:5173
-ALLOWED_HOSTS=localhost,127.0.0.1
-```
-
-`DATABASE_HOST` must be `db` inside Docker Compose.
-
-Start services:
-
-```bash
-docker compose up --build
-```
-
-Run setup commands in another terminal:
-
-```bash
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py seed
-docker compose exec web python manage.py import_openlibrary_books --limit 500 --copies 50
-```
-
-Stop services:
-
-```bash
-docker compose down
-```
-
-Delete the database volume too:
-
-```bash
-docker compose down -v
-```
+| `SECRET_KEY` | `dev-secret-key-change-in-production` | JWT signing key; override outside local development |
+| `DATABASE_NAME` | `libratrack` | MySQL schema name |
+| `DATABASE_USER` | `libratrack_user` | MySQL username |
+| `DATABASE_PASSWORD` | `libratrack_pass` | MySQL password |
+| `DATABASE_HOST` | `localhost` | MySQL host |
+| `DATABASE_PORT` | `3306` | MySQL port |
+| `COOKIE_SECURE` | `false` | Set to `true` in production with HTTPS |

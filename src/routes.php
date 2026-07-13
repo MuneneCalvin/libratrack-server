@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use LibraTrack\Controllers\AuthController;
+use LibraTrack\Controllers\SettingsController;
 use LibraTrack\Core\Config;
 use LibraTrack\Core\Database;
 use LibraTrack\Core\Request;
@@ -10,6 +11,7 @@ use LibraTrack\Core\Response;
 use LibraTrack\Core\Router;
 use LibraTrack\Repositories\MemberRepository;
 use LibraTrack\Repositories\RefreshTokenRepository;
+use LibraTrack\Repositories\SettingsRepository;
 use LibraTrack\Repositories\UserRepository;
 use LibraTrack\Services\AuthService;
 use LibraTrack\Services\PasswordService;
@@ -25,6 +27,7 @@ $passwords = new PasswordService();
 $tokens = new TokenService($config);
 $authService = new AuthService($users, $refreshTokens, $members, $passwords, $tokens);
 $auth = new AuthController($authService, $tokens, $config->bool('COOKIE_SECURE', false));
+$settings = new SettingsController(new SettingsRepository($pdo));
 
 $router = new Router();
 
@@ -38,5 +41,8 @@ $router->add('POST', '/api/auth/logout/', fn (Request $request, array $params): 
 $router->add('GET', '/api/auth/me/', fn (Request $request, array $params): Response => $auth->me($request));
 $router->add('PATCH', '/api/auth/me/', fn (Request $request, array $params): Response => $auth->updateMe($request));
 $router->add('PATCH', '/api/auth/change-password/', fn (Request $request, array $params): Response => $auth->changePassword($request));
+$router->add('GET', '/api/settings/', fn (Request $request, array $params): Response => $settings->show($request));
+$router->add('PATCH', '/api/settings/', fn (Request $request, array $params): Response => $settings->update($request));
+$router->add('PUT', '/api/settings/', fn (Request $request, array $params): Response => $settings->update($request));
 
 return $router;
