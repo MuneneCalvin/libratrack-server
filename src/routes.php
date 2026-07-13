@@ -6,6 +6,7 @@ use LibraTrack\Controllers\AuthController;
 use LibraTrack\Controllers\BookController;
 use LibraTrack\Controllers\CategoryController;
 use LibraTrack\Controllers\MemberController;
+use LibraTrack\Controllers\ReservationController;
 use LibraTrack\Controllers\SettingsController;
 use LibraTrack\Controllers\TransactionController;
 use LibraTrack\Core\Config;
@@ -20,6 +21,7 @@ use LibraTrack\Repositories\CategoryRepository;
 use LibraTrack\Repositories\FineRepository;
 use LibraTrack\Repositories\MemberRepository;
 use LibraTrack\Repositories\RefreshTokenRepository;
+use LibraTrack\Repositories\ReservationRepository;
 use LibraTrack\Repositories\SettingsRepository;
 use LibraTrack\Repositories\TransactionRepository;
 use LibraTrack\Repositories\UserRepository;
@@ -51,6 +53,15 @@ $fineRepository = new FineRepository($pdo);
 $transactionController = new TransactionController(
     $transactionRepository,
     $fineRepository,
+    $members,
+    $bookRepository,
+    $settingsRepository,
+    $authMiddleware,
+    $roleMiddleware
+);
+$reservationRepository = new ReservationRepository($pdo);
+$reservationController = new ReservationController(
+    $reservationRepository,
     $members,
     $bookRepository,
     $settingsRepository,
@@ -99,5 +110,11 @@ $router->add('POST', '/api/transactions/', fn (Request $request, array $params):
 $router->add('GET', '/api/transactions/{id}/', fn (Request $request, array $params): Response => $transactionController->show($request, $params));
 $router->add('POST', '/api/transactions/{id}/return/', fn (Request $request, array $params): Response => $transactionController->returnItems($request, $params));
 $router->add('GET', '/api/members/{id}/transactions/', fn (Request $request, array $params): Response => $transactionController->forMember($request, $params));
+$router->add('GET', '/api/reservations/', fn (Request $request, array $params): Response => $reservationController->index($request));
+$router->add('POST', '/api/reservations/', fn (Request $request, array $params): Response => $reservationController->store($request));
+$router->add('GET', '/api/reservations/{id}/', fn (Request $request, array $params): Response => $reservationController->show($request, $params));
+$router->add('PATCH', '/api/reservations/{id}/cancel/', fn (Request $request, array $params): Response => $reservationController->cancel($request, $params));
+$router->add('PATCH', '/api/reservations/{id}/fulfill/', fn (Request $request, array $params): Response => $reservationController->fulfill($request, $params));
+$router->add('GET', '/api/members/{id}/reservations/', fn (Request $request, array $params): Response => $reservationController->forMember($request, $params));
 
 return $router;

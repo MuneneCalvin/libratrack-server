@@ -118,6 +118,7 @@ final class MemberRepository
 
         $this->pdo->beginTransaction();
         try {
+            $this->pdo->prepare('DELETE FROM reservations WHERE member_id = ?')->execute([$id]);
             $this->pdo->prepare('DELETE FROM fines WHERE member_id = ?')->execute([$id]);
             $this->pdo->prepare('DELETE FROM transactions WHERE member_id = ?')->execute([$id]);
             $this->pdo->prepare('DELETE FROM members WHERE id = ?')->execute([$id]);
