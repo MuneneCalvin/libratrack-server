@@ -18,13 +18,7 @@ final class App
 
     public function handle(Request $request): Response
     {
-        try {
-            return $this->router->dispatch($request);
-        } catch (ValidationException $exception) {
-            return Response::error($exception->getMessage(), $exception->statusCode);
-        } catch (\Throwable) {
-            return Response::error('Internal server error', 500);
-        }
+        return $this->router->dispatch($request);
     }
 
     public function run(): void

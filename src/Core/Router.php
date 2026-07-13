@@ -31,7 +31,14 @@ final class Router
                 continue;
             }
             $params = array_filter($matches, is_string(...), ARRAY_FILTER_USE_KEY);
-            return ($route['handler'])($request, $params);
+
+            try {
+                return ($route['handler'])($request, $params);
+            } catch (ValidationException $exception) {
+                return Response::error($exception->getMessage(), $exception->statusCode);
+            } catch (\Throwable) {
+                return Response::error('Internal server error', 500);
+            }
         }
 
         return Response::error('Route not found', 404);
