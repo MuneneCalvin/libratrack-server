@@ -51,7 +51,7 @@ final class OpenLibraryClient
                 return is_array($decoded) ? $decoded : [];
             }
             if ($attempt < $this->retries) {
-                usleep((int) min(0.75 * $attempt, 5.0) * 1_000_000);
+                usleep((int) (min(0.75 * $attempt, 5.0) * 1_000_000));
             }
         }
 
