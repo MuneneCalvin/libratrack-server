@@ -34,4 +34,19 @@ final class RouterTest extends TestCase
         $this->assertSame('error', $response->payload['status']);
         $this->assertSame('Route not found', $response->payload['message']);
     }
+
+    public function testRouteRegexEscapesLiteralCharacters(): void
+    {
+        $router = new Router();
+        $router->add('GET', '/api/files/{name}.json/', function (Request $request, array $params): Response {
+            return Response::success(['name' => $params['name']]);
+        });
+
+        $matching = $router->dispatch(new Request('GET', '/api/files/catalog.json/', [], [], [], null));
+        $nonMatching = $router->dispatch(new Request('GET', '/api/files/catalogxjson/', [], [], [], null));
+
+        $this->assertSame(200, $matching->statusCode);
+        $this->assertSame(['status' => 'success', 'data' => ['name' => 'catalog']], $matching->payload);
+        $this->assertSame(404, $nonMatching->statusCode);
+    }
 }

@@ -11,7 +11,8 @@ final class Router
 
     public function add(string $method, string $pattern, callable $handler): void
     {
-        $regex = preg_replace('/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/', '(?P<$1>[^/]+)', $pattern);
+        $regex = preg_quote($pattern, '#');
+        $regex = preg_replace('/\\\\\{([a-zA-Z_][a-zA-Z0-9_]*)\\\\\}/', '(?P<$1>[^/]+)', $regex);
         $this->routes[] = [
             'method' => strtoupper($method),
             'pattern' => $pattern,
