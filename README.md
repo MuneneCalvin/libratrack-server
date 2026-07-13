@@ -1,6 +1,6 @@
-# LibraTrack - Backend
+# LibraTrack - Backend (PHP)
 
-LibraTrack Backend is a Django REST API for a library management platform. It
+LibraTrack Backend is a plain PHP REST API for a library management platform. It
 stores and serves the data used by the React frontend: users, roles, books,
 members, borrowing transactions, reservations, fines, notifications, reports, and
 library settings.
@@ -8,6 +8,8 @@ library settings.
 The backend is designed for a prototype-ready library system where staff can
 manage day-to-day circulation and members can browse, reserve, and manage their
 own account.
+
+**Note:** This is the PHP rewrite of the original Django backend.
 
 ---
 
@@ -33,13 +35,13 @@ own account.
 
 | Layer | Technology |
 |---|---|
-| Framework | Django 4.2 |
-| API layer | Django REST Framework 3.15 |
-| Database | MySQL 8 via PyMySQL |
-| Authentication | Custom JWT with PyJWT and bcrypt |
-| Config | python-decouple |
-| CORS | django-cors-headers |
-| Testing | pytest + pytest-django |
+| Language | PHP 8.5+ |
+| Framework | Plain PHP with custom HTTP core |
+| Database | MySQL 8 via PDO |
+| Authentication | Custom JWT with php-jwt and password_hash |
+| Config | Dotenv via vlucas/phpdotenv |
+| HTTP | PDO for database connection pooling |
+| Testing | PHPUnit 11 |
 
 ---
 
