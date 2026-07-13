@@ -139,6 +139,11 @@ final class TransactionEndpointTest extends TestCase
         $this->assertSame('ACTIVE', $response->payload['data']['status']);
         $this->assertCount(1, $response->payload['data']['items']);
 
+        $this->assertSame('Txn Test Member', $response->payload['data']['memberName']);
+        $this->assertSame('Txn Test Book', $response->payload['data']['items'][0]['book']['title']);
+        $this->assertSame($bookId, $response->payload['data']['items'][0]['book']['id']);
+        $this->assertArrayNotHasKey('bookId', $response->payload['data']['items'][0]);
+
         $statement = self::$pdo->prepare('SELECT available_copies FROM books WHERE id = ?');
         $statement->execute([$bookId]);
         $this->assertSame(2, (int) $statement->fetchColumn());
@@ -276,6 +281,57 @@ final class TransactionEndpointTest extends TestCase
         $fineStatement = self::$pdo->prepare('SELECT COUNT(*) FROM fines WHERE transaction_id = ?');
         $fineStatement->execute([$transactionId]);
         $this->assertSame(1, (int) $fineStatement->fetchColumn());
+    }
+
+    /**
+     * Regression test for calendar-date-based (not full-datetime) fine day-count.
+     *
+     * We pick a due date 3 calendar days before "now" but with a time-of-day
+     * *later* than the current time-of-day (due date's clock time is 1 hour
+     * ahead of now's clock time). Under the old `$now->diff($dueDate)->days`
+     * (full 24-hour-period truncation) this yields only 2 complete days late,
+     * but under Django's `(now.date() - due_date.date()).days` calendar-day
+     * floor (which the PHP code must match) it yields 3 days late. This
+     * exercises the exact divergence described in Finding 3.
+     */
+    public function testReturnOverdueTransactionUsesCalendarDayCountNotFullDatetimeDiff(): void
+    {
+        $bookId = $this->createBook(1);
+
+        $now = new \DateTimeImmutable();
+        // Due date: 3 calendar days ago, at a clock time 1 hour later than "now"'s
+        // clock time, so the full-datetime diff undercounts relative to the
+        // calendar-date diff.
+        $dueDate = $now->modify('-3 days')->modify('+1 hour');
+
+        $insertTransaction = self::$pdo->prepare(
+            'INSERT INTO transactions (member_id, borrowed_at, due_date, status) VALUES (?, ?, ?, \'ACTIVE\')'
+        );
+        $insertTransaction->execute([
+            self::$memberId,
+            $dueDate->modify('-14 days')->format('Y-m-d H:i:s'),
+            $dueDate->format('Y-m-d H:i:s'),
+        ]);
+        $transactionId = (int) self::$pdo->lastInsertId();
+        self::$pdo->prepare('INSERT INTO transaction_items (transaction_id, book_id) VALUES (?, ?)')->execute([$transactionId, $bookId]);
+        self::$pdo->prepare('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?')->execute([$bookId]);
+
+        $fineRate = (float) self::$pdo->query(
+            "SELECT setting_value FROM settings WHERE setting_key = 'fine_rate_per_day'"
+        )->fetchColumn();
+
+        $headers = ['authorization' => 'Bearer ' . self::$adminToken];
+        $return = $this->router()->dispatch(new Request('POST', "/api/transactions/{$transactionId}/return/", [], $headers, [], null));
+
+        $this->assertSame(200, $return->statusCode);
+
+        $fineStatement = self::$pdo->prepare('SELECT amount, reason FROM fines WHERE transaction_id = ?');
+        $fineStatement->execute([$transactionId]);
+        $fine = $fineStatement->fetch();
+
+        $this->assertNotFalse($fine);
+        $this->assertSame('Book returned 3 day(s) late', $fine['reason']);
+        $this->assertEqualsWithDelta(3 * $fineRate, (float) $fine['amount'], 0.001);
     }
 
     public function testMemberTransactionsEndpointRequiresSelfOrStaff(): void

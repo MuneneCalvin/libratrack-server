@@ -6,6 +6,7 @@ namespace LibraTrack\Repositories;
 
 use DateTimeImmutable;
 use LibraTrack\Core\Pagination;
+use LibraTrack\Core\ValidationException;
 use PDO;
 
 final class TransactionRepository
@@ -60,10 +61,16 @@ final class TransactionRepository
             return null;
         }
 
+        $memberStatement = $this->pdo->prepare('SELECT full_name FROM members WHERE id = ?');
+        $memberStatement->execute([(int) $transaction['member_id']]);
+        $transaction['member_full_name'] = $memberStatement->fetchColumn() ?: null;
+
         $statement = $this->pdo->prepare(
-            'SELECT transaction_items.id AS item_id, transaction_items.returned_at AS item_returned_at, books.*
+            'SELECT transaction_items.id AS item_id, transaction_items.returned_at AS item_returned_at,
+                    books.*, categories.name AS category_name
              FROM transaction_items
              JOIN books ON books.id = transaction_items.book_id
+             JOIN categories ON categories.id = books.category_id
              WHERE transaction_items.transaction_id = ?
              ORDER BY transaction_items.id ASC'
         );
@@ -90,17 +97,30 @@ final class TransactionRepository
 
     public function create(int $memberId, array $bookIds, DateTimeImmutable $dueDate): int
     {
-        $statement = $this->pdo->prepare(
-            'INSERT INTO transactions (member_id, due_date, status) VALUES (?, ?, \'ACTIVE\')'
-        );
-        $statement->execute([$memberId, $dueDate->format('Y-m-d H:i:s')]);
-        $transactionId = (int) $this->pdo->lastInsertId();
+        $this->pdo->beginTransaction();
+        try {
+            $statement = $this->pdo->prepare(
+                'INSERT INTO transactions (member_id, due_date, status) VALUES (?, ?, \'ACTIVE\')'
+            );
+            $statement->execute([$memberId, $dueDate->format('Y-m-d H:i:s')]);
+            $transactionId = (int) $this->pdo->lastInsertId();
 
-        $insertItem = $this->pdo->prepare('INSERT INTO transaction_items (transaction_id, book_id) VALUES (?, ?)');
-        $decrementBook = $this->pdo->prepare('UPDATE books SET available_copies = available_copies - 1 WHERE id = ?');
-        foreach ($bookIds as $bookId) {
-            $insertItem->execute([$transactionId, $bookId]);
-            $decrementBook->execute([$bookId]);
+            $insertItem = $this->pdo->prepare('INSERT INTO transaction_items (transaction_id, book_id) VALUES (?, ?)');
+            $decrementBook = $this->pdo->prepare(
+                'UPDATE books SET available_copies = available_copies - 1 WHERE id = ? AND available_copies > 0'
+            );
+            foreach ($bookIds as $bookId) {
+                $insertItem->execute([$transactionId, $bookId]);
+                $decrementBook->execute([$bookId]);
+                if ($decrementBook->rowCount() === 0) {
+                    throw new ValidationException('Book is no longer available');
+                }
+            }
+
+            $this->pdo->commit();
+        } catch (\Throwable $exception) {
+            $this->pdo->rollBack();
+            throw $exception;
         }
 
         return $transactionId;
@@ -120,21 +140,29 @@ final class TransactionRepository
 
     public function returnItems(int $transactionId, array $itemIds): void
     {
-        $markReturned = $this->pdo->prepare('UPDATE transaction_items SET returned_at = NOW() WHERE id = ?');
-        $incrementBook = $this->pdo->prepare('UPDATE books SET available_copies = available_copies + 1 WHERE id = ?');
+        $this->pdo->beginTransaction();
+        try {
+            $markReturned = $this->pdo->prepare('UPDATE transaction_items SET returned_at = NOW() WHERE id = ?');
+            $incrementBook = $this->pdo->prepare('UPDATE books SET available_copies = available_copies + 1 WHERE id = ?');
 
-        foreach ($itemIds as ['id' => $itemId, 'book_id' => $bookId]) {
-            $markReturned->execute([$itemId]);
-            $incrementBook->execute([$bookId]);
-        }
+            foreach ($itemIds as ['id' => $itemId, 'book_id' => $bookId]) {
+                $markReturned->execute([$itemId]);
+                $incrementBook->execute([$bookId]);
+            }
 
-        $remaining = $this->pdo->prepare(
-            'SELECT COUNT(*) FROM transaction_items WHERE transaction_id = ? AND returned_at IS NULL'
-        );
-        $remaining->execute([$transactionId]);
-        if ((int) $remaining->fetchColumn() === 0) {
-            $this->pdo->prepare("UPDATE transactions SET status = 'RETURNED', returned_at = NOW() WHERE id = ?")
-                ->execute([$transactionId]);
+            $remaining = $this->pdo->prepare(
+                'SELECT COUNT(*) FROM transaction_items WHERE transaction_id = ? AND returned_at IS NULL'
+            );
+            $remaining->execute([$transactionId]);
+            if ((int) $remaining->fetchColumn() === 0) {
+                $this->pdo->prepare("UPDATE transactions SET status = 'RETURNED', returned_at = NOW() WHERE id = ?")
+                    ->execute([$transactionId]);
+            }
+
+            $this->pdo->commit();
+        } catch (\Throwable $exception) {
+            $this->pdo->rollBack();
+            throw $exception;
         }
     }
 

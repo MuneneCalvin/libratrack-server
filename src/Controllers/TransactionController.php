@@ -145,7 +145,9 @@ final class TransactionController
         $now = new DateTimeImmutable();
         $dueDate = new DateTimeImmutable($transaction['due_date']);
         if ($now > $dueDate) {
-            $daysLate = max(1, $now->diff($dueDate)->days);
+            $today = new DateTimeImmutable($now->format('Y-m-d'));
+            $dueDay = new DateTimeImmutable($dueDate->format('Y-m-d'));
+            $daysLate = max(1, $today->diff($dueDay)->days);
             $fineRate = $this->settings->all()['fineRatePerDay'];
             $this->fines->createForOverdueReturn(
                 (int) $transaction['member_id'],
@@ -182,13 +184,14 @@ final class TransactionController
         return [
             'id' => (int) $row['id'],
             'memberId' => (int) $row['member_id'],
+            'memberName' => $row['member_full_name'] ?? null,
             'borrowedAt' => (new DateTimeImmutable($row['borrowed_at']))->format(DateTimeInterface::ATOM),
             'dueDate' => (new DateTimeImmutable($row['due_date']))->format(DateTimeInterface::ATOM),
             'returnedAt' => $row['returned_at'] !== null ? (new DateTimeImmutable($row['returned_at']))->format(DateTimeInterface::ATOM) : null,
             'status' => $row['status'],
             'items' => array_map(static fn (array $item): array => [
                 'id' => (int) $item['item_id'],
-                'bookId' => (int) $item['id'],
+                'book' => BookRepository::toFrontend($item),
                 'returnedAt' => $item['item_returned_at'] !== null ? (new DateTimeImmutable($item['item_returned_at']))->format(DateTimeInterface::ATOM) : null,
             ], $row['items'] ?? []),
         ];

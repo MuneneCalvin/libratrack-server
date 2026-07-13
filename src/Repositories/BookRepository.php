@@ -129,6 +129,49 @@ final class BookRepository
         ];
     }
 
+    /**
+     * Shapes a raw book row (as returned by `find()`/`search()`, i.e. `books.*` joined
+     * with `categories.name AS category_name`) into the camelCase frontend representation.
+     * Shared by BookController and TransactionController so the two never drift apart.
+     */
+    public static function toFrontend(array $row): array
+    {
+        return [
+            'id' => (int) $row['id'],
+            'title' => $row['title'],
+            'author' => $row['author'],
+            'isbn' => $row['isbn'],
+            'categoryId' => (int) $row['category_id'],
+            'categoryName' => $row['category_name'],
+            'totalCopies' => (int) $row['total_copies'],
+            'availableCopies' => (int) $row['available_copies'],
+            'publisher' => $row['publisher'],
+            'publishedYear' => $row['published_year'] !== null ? (int) $row['published_year'] : null,
+            'coverUrl' => $row['cover_url'],
+            'openLibraryWorkKey' => $row['openlibrary_work_key'],
+            'synopsis' => $row['synopsis'],
+            'subjects' => json_decode($row['subjects'] ?? '[]', true, 512, JSON_THROW_ON_ERROR),
+            'languageCodes' => json_decode($row['language_codes'] ?? '[]', true, 512, JSON_THROW_ON_ERROR),
+            'editionCount' => (int) $row['edition_count'],
+            'ratingAverage' => $row['rating_average'] !== null ? (float) $row['rating_average'] : null,
+            'ratingCount' => (int) $row['rating_count'],
+            'wantToReadCount' => (int) $row['want_to_read_count'],
+            'currentlyReadingCount' => (int) $row['currently_reading_count'],
+            'alreadyReadCount' => (int) $row['already_read_count'],
+            'createdAt' => self::toIso8601($row['created_at']),
+            'updatedAt' => self::toIso8601($row['updated_at']),
+        ];
+    }
+
+    private static function toIso8601(?string $timestamp): ?string
+    {
+        if ($timestamp === null) {
+            return null;
+        }
+
+        return (new \DateTimeImmutable($timestamp))->format(\DateTimeInterface::ATOM);
+    }
+
     private function buildWhere(array $filters): array
     {
         $clauses = [];
