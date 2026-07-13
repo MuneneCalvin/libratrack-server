@@ -5,6 +5,7 @@ declare(strict_types=1);
 use LibraTrack\Controllers\AuthController;
 use LibraTrack\Controllers\BookController;
 use LibraTrack\Controllers\CategoryController;
+use LibraTrack\Controllers\FineController;
 use LibraTrack\Controllers\MemberController;
 use LibraTrack\Controllers\ReservationController;
 use LibraTrack\Controllers\SettingsController;
@@ -50,6 +51,7 @@ $bookController = new BookController($bookRepository, $categoryRepository, $auth
 $memberController = new MemberController($members, $users, $passwords, $authMiddleware, $roleMiddleware);
 $transactionRepository = new TransactionRepository($pdo);
 $fineRepository = new FineRepository($pdo);
+$fineController = new FineController($fineRepository, $members, $authMiddleware, $roleMiddleware);
 $transactionController = new TransactionController(
     $transactionRepository,
     $fineRepository,
@@ -116,5 +118,10 @@ $router->add('GET', '/api/reservations/{id}/', fn (Request $request, array $para
 $router->add('PATCH', '/api/reservations/{id}/cancel/', fn (Request $request, array $params): Response => $reservationController->cancel($request, $params));
 $router->add('PATCH', '/api/reservations/{id}/fulfill/', fn (Request $request, array $params): Response => $reservationController->fulfill($request, $params));
 $router->add('GET', '/api/members/{id}/reservations/', fn (Request $request, array $params): Response => $reservationController->forMember($request, $params));
+$router->add('GET', '/api/fines/', fn (Request $request, array $params): Response => $fineController->index($request));
+$router->add('GET', '/api/fines/{id}/', fn (Request $request, array $params): Response => $fineController->show($request, $params));
+$router->add('PATCH', '/api/fines/{id}/pay/', fn (Request $request, array $params): Response => $fineController->pay($request, $params));
+$router->add('PATCH', '/api/fines/{id}/waive/', fn (Request $request, array $params): Response => $fineController->waive($request, $params));
+$router->add('GET', '/api/members/{id}/fines/', fn (Request $request, array $params): Response => $fineController->forMember($request, $params));
 
 return $router;
