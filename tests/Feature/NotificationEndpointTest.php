@@ -64,6 +64,16 @@ final class NotificationEndpointTest extends TestCase
         self::$adminToken = $tokens->issueAccessToken(['id' => $adminId, 'email' => 'notif-test-admin@libratrack.com', 'role' => 'admin']);
     }
 
+    public static function tearDownAfterClass(): void
+    {
+        self::cleanupPriorRows([
+            'notif-test-member@libratrack.com',
+            'notif-test-second@libratrack.com',
+            'notif-test-librarian@libratrack.com',
+            'notif-test-admin@libratrack.com',
+        ]);
+    }
+
     private static function cleanupPriorRows(array $emails): void
     {
         $placeholders = implode(',', array_fill(0, count($emails), '?'));

@@ -21,7 +21,7 @@ final class ReportRepository
         $borrowedBooks = (int) $this->pdo->query(
             "SELECT COUNT(*) FROM transaction_items
              JOIN transactions ON transactions.id = transaction_items.transaction_id
-             WHERE transactions.status IN ('ACTIVE', 'OVERDUE') AND transaction_items.returned_at IS NULL"
+             WHERE transactions.status = 'ACTIVE' AND transaction_items.returned_at IS NULL"
         )->fetchColumn();
         $overdueCount = (int) $this->pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'OVERDUE'")->fetchColumn();
         $pendingReservations = (int) $this->pdo->query("SELECT COUNT(*) FROM reservations WHERE status = 'PENDING'")->fetchColumn();
@@ -146,12 +146,25 @@ final class ReportRepository
     {
         return match ($report) {
             'borrowing' => array_map(static fn (string $key, int $value): array => [$key, $value], array_keys($this->borrowing()), $this->borrowing()),
-            'inventory' => array_map(static fn (array $row): array => [$row['name'], $row['count']], $this->inventory()['categories']),
+            'inventory' => $this->inventoryCsvRows(),
             'fines' => array_map(static fn (string $key, string $value): array => [$key, $value], array_keys($this->fines()), $this->fines()),
             'members' => array_map(static fn (string $key, int $value): array => [$key, $value], array_keys($this->members()), $this->members()),
             'popular-books' => array_map(static fn (array $book): array => [$book['title'], $book['borrowCount']], $this->popularBooks()),
             default => null,
         };
+    }
+
+    private function inventoryCsvRows(): array
+    {
+        $rows = $this->pdo->query(
+            'SELECT categories.name, COUNT(books.id) AS count
+             FROM categories
+             LEFT JOIN books ON books.category_id = categories.id
+             GROUP BY categories.id, categories.name
+             ORDER BY categories.name ASC'
+        )->fetchAll();
+
+        return array_map(static fn (array $row): array => [$row['name'], (int) $row['count']], $rows);
     }
 
     private function countTransactions(string $status): int

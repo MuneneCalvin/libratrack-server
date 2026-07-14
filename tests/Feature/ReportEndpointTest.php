@@ -18,6 +18,8 @@ final class ReportEndpointTest extends TestCase
     private static int $memberId;
     private static int $categoryId;
     private static int $bookId;
+    private static string $csvACategoryName;
+    private static string $csvZCategoryName;
 
     public static function setUpBeforeClass(): void
     {
@@ -50,6 +52,8 @@ final class ReportEndpointTest extends TestCase
         )->execute([self::$categoryId, 'Report Test Book', 'Author', 'ISBN-' . bin2hex(random_bytes(6))]);
         self::$bookId = (int) self::$pdo->lastInsertId();
 
+        self::createInventoryCsvFixtures();
+
         self::$pdo->prepare(
             "INSERT INTO transactions (member_id, borrowed_at, due_date, status)
              VALUES (?, NOW() - INTERVAL 20 DAY, NOW() - INTERVAL 5 DAY, 'OVERDUE')"
@@ -63,6 +67,13 @@ final class ReportEndpointTest extends TestCase
         )->execute([self::$memberId]);
         $returnedTransactionId = (int) self::$pdo->lastInsertId();
         self::$pdo->prepare('INSERT INTO transaction_items (transaction_id, book_id, returned_at) VALUES (?, ?, NOW())')->execute([$returnedTransactionId, self::$bookId]);
+
+        self::$pdo->prepare(
+            "INSERT INTO transactions (member_id, borrowed_at, due_date, status)
+             VALUES (?, NOW() - INTERVAL 2 DAY, NOW() + INTERVAL 12 DAY, 'ACTIVE')"
+        )->execute([self::$memberId]);
+        $activeTransactionId = (int) self::$pdo->lastInsertId();
+        self::$pdo->prepare('INSERT INTO transaction_items (transaction_id, book_id) VALUES (?, ?)')->execute([$activeTransactionId, self::$bookId]);
 
         self::$pdo->prepare(
             "INSERT INTO reservations (member_id, book_id, expires_at, status) VALUES (?, ?, NOW() + INTERVAL 3 DAY, 'PENDING')"
@@ -104,8 +115,28 @@ final class ReportEndpointTest extends TestCase
         self::$pdo->prepare("DELETE FROM members WHERE user_id IN (SELECT id FROM users WHERE email IN ({$placeholders}))")->execute($emails);
         self::$pdo->prepare("DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE email IN ({$placeholders}))")->execute($emails);
         self::$pdo->prepare("DELETE FROM users WHERE email IN ({$placeholders})")->execute($emails);
-        self::$pdo->prepare("DELETE FROM books WHERE title = 'Report Test Book'")->execute();
-        self::$pdo->prepare("DELETE FROM categories WHERE name LIKE 'Report Test Category%'")->execute();
+        self::$pdo->prepare("DELETE FROM books WHERE title LIKE 'Report Test Book%'")->execute();
+        self::$pdo->prepare("DELETE FROM categories WHERE name LIKE 'Report Test%'")->execute();
+    }
+
+    private static function createInventoryCsvFixtures(): void
+    {
+        $suffix = bin2hex(random_bytes(3));
+        self::$csvACategoryName = 'Report Test CSV A ' . $suffix;
+        self::$csvZCategoryName = 'Report Test CSV Z ' . $suffix;
+
+        self::$pdo->prepare('INSERT INTO categories (name) VALUES (?)')->execute([self::$csvACategoryName]);
+        $categoryA = (int) self::$pdo->lastInsertId();
+        self::$pdo->prepare('INSERT INTO categories (name) VALUES (?)')->execute([self::$csvZCategoryName]);
+        $categoryZ = (int) self::$pdo->lastInsertId();
+
+        $insertBook = self::$pdo->prepare(
+            'INSERT INTO books (category_id, title, author, isbn, total_copies, available_copies)
+             VALUES (?, ?, ?, ?, 1, 1)'
+        );
+        $insertBook->execute([$categoryA, 'Report Test Book CSV A', 'Author', 'ISBN-' . bin2hex(random_bytes(6))]);
+        $insertBook->execute([$categoryZ, 'Report Test Book CSV Z1', 'Author', 'ISBN-' . bin2hex(random_bytes(6))]);
+        $insertBook->execute([$categoryZ, 'Report Test Book CSV Z2', 'Author', 'ISBN-' . bin2hex(random_bytes(6))]);
     }
 
     private function router(): \LibraTrack\Core\Router
@@ -132,6 +163,26 @@ final class ReportEndpointTest extends TestCase
         }
         $this->assertGreaterThanOrEqual(1, $response->payload['data']['pendingReservations']);
         $this->assertGreaterThanOrEqual(1, $response->payload['data']['borrowedBooks']);
+    }
+
+    public function testSummaryDoesNotCountOverdueItemsAsBorrowedBooks(): void
+    {
+        $router = $this->router();
+        $headers = ['authorization' => 'Bearer ' . self::$adminToken];
+        $before = $router->dispatch(new Request('GET', '/api/reports/summary/', [], $headers, [], null));
+        $this->assertSame(200, $before->statusCode);
+
+        self::$pdo->prepare(
+            "INSERT INTO transactions (member_id, borrowed_at, due_date, status)
+             VALUES (?, NOW() - INTERVAL 30 DAY, NOW() - INTERVAL 14 DAY, 'OVERDUE')"
+        )->execute([self::$memberId]);
+        $transactionId = (int) self::$pdo->lastInsertId();
+        self::$pdo->prepare('INSERT INTO transaction_items (transaction_id, book_id) VALUES (?, ?)')->execute([$transactionId, self::$bookId]);
+
+        $after = $router->dispatch(new Request('GET', '/api/reports/summary/', [], $headers, [], null));
+        $this->assertSame(200, $after->statusCode);
+        $this->assertSame($before->payload['data']['borrowedBooks'], $after->payload['data']['borrowedBooks']);
+        $this->assertSame($before->payload['data']['overdueCount'] + 1, $after->payload['data']['overdueCount']);
     }
 
     public function testBorrowingInventoryFinesAndMembersReports(): void
@@ -187,6 +238,25 @@ final class ReportEndpointTest extends TestCase
         $this->assertSame('text/csv', $response->headers['Content-Type']);
         $this->assertSame('attachment; filename="borrowing.csv"', $response->headers['Content-Disposition']);
         $this->assertStringContainsString('metric,value', $response->rawBody);
+    }
+
+    public function testInventoryCsvExportOrdersRowsByCategoryName(): void
+    {
+        $response = $this->router()->dispatch(new Request(
+            'POST',
+            '/api/reports/export/',
+            [],
+            ['authorization' => 'Bearer ' . self::$adminToken, 'content-type' => 'application/json'],
+            [],
+            ['type' => 'csv', 'report' => 'inventory']
+        ));
+
+        $this->assertSame(200, $response->statusCode);
+        $firstPosition = strpos($response->rawBody, self::$csvACategoryName);
+        $secondPosition = strpos($response->rawBody, self::$csvZCategoryName);
+        $this->assertIsInt($firstPosition);
+        $this->assertIsInt($secondPosition);
+        $this->assertLessThan($secondPosition, $firstPosition);
     }
 
     public function testCsvExportRejectsUnsupportedTypeAndUnknownReport(): void
