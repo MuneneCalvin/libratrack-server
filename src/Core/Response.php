@@ -9,7 +9,8 @@ final class Response
     public function __construct(
         public readonly array $payload,
         public readonly int $statusCode = 200,
-        public readonly array $headers = []
+        public readonly array $headers = [],
+        public readonly ?string $rawBody = null
     ) {
     }
 
@@ -28,9 +29,25 @@ final class Response
         return new self(array_merge(['status' => 'error', 'message' => $message], $extra), $status);
     }
 
+    public static function csv(string $body, string $filename): self
+    {
+        return new self([], 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ], $body);
+    }
+
     public function send(): void
     {
         http_response_code($this->statusCode);
+        if ($this->rawBody !== null) {
+            foreach ($this->headers as $name => $value) {
+                header($name . ': ' . $value);
+            }
+            echo $this->rawBody;
+            return;
+        }
+
         header('Content-Type: application/json');
         foreach ($this->headers as $name => $value) {
             header($name . ': ' . $value);

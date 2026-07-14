@@ -8,6 +8,7 @@ use LibraTrack\Controllers\CategoryController;
 use LibraTrack\Controllers\FineController;
 use LibraTrack\Controllers\MemberController;
 use LibraTrack\Controllers\NotificationController;
+use LibraTrack\Controllers\ReportController;
 use LibraTrack\Controllers\ReservationController;
 use LibraTrack\Controllers\SettingsController;
 use LibraTrack\Controllers\TransactionController;
@@ -23,6 +24,7 @@ use LibraTrack\Repositories\CategoryRepository;
 use LibraTrack\Repositories\FineRepository;
 use LibraTrack\Repositories\MemberRepository;
 use LibraTrack\Repositories\NotificationRepository;
+use LibraTrack\Repositories\ReportRepository;
 use LibraTrack\Repositories\RefreshTokenRepository;
 use LibraTrack\Repositories\ReservationRepository;
 use LibraTrack\Repositories\SettingsRepository;
@@ -56,6 +58,8 @@ $fineRepository = new FineRepository($pdo);
 $fineController = new FineController($fineRepository, $members, $authMiddleware, $roleMiddleware);
 $notificationRepository = new NotificationRepository($pdo);
 $notificationController = new NotificationController($notificationRepository, $authMiddleware, $roleMiddleware);
+$reportRepository = new ReportRepository($pdo);
+$reportController = new ReportController($reportRepository, $authMiddleware, $roleMiddleware);
 $transactionController = new TransactionController(
     $transactionRepository,
     $fineRepository,
@@ -131,5 +135,13 @@ $router->add('GET', '/api/notifications/', fn (Request $request, array $params):
 $router->add('PATCH', '/api/notifications/read-all/', fn (Request $request, array $params): Response => $notificationController->markAllRead($request));
 $router->add('POST', '/api/notifications/remind/', fn (Request $request, array $params): Response => $notificationController->remind($request));
 $router->add('PATCH', '/api/notifications/{id}/read/', fn (Request $request, array $params): Response => $notificationController->markRead($request, $params));
+$router->add('GET', '/api/reports/summary/', fn (Request $request, array $params): Response => $reportController->summary($request));
+$router->add('GET', '/api/reports/borrowing/', fn (Request $request, array $params): Response => $reportController->borrowing($request));
+$router->add('GET', '/api/reports/inventory/', fn (Request $request, array $params): Response => $reportController->inventory($request));
+$router->add('GET', '/api/reports/fines/', fn (Request $request, array $params): Response => $reportController->fines($request));
+$router->add('GET', '/api/reports/overdue/', fn (Request $request, array $params): Response => $reportController->overdue($request));
+$router->add('GET', '/api/reports/popular-books/', fn (Request $request, array $params): Response => $reportController->popularBooks($request));
+$router->add('GET', '/api/reports/members/', fn (Request $request, array $params): Response => $reportController->members($request));
+$router->add('POST', '/api/reports/export/', fn (Request $request, array $params): Response => $reportController->export($request));
 
 return $router;
