@@ -3,7 +3,7 @@ services:
     image: mysql:8
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: libratrack
+      MYSQL_DATABASE: libratrack_php
       MYSQL_USER: libratrack_user
       MYSQL_PASSWORD: libratrack_pass
     ports:
@@ -18,15 +18,22 @@ services:
 
   web:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    command: php -S 0.0.0.0:8000 -t public
     ports:
       - "8000:8000"
     env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: libratrack_php
+      DB_USER: libratrack_user
+      DB_PASSWORD: libratrack_pass
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - .:/app
+      - /app/vendor
 
 volumes:
   mysql_data:

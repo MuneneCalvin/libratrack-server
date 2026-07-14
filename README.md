@@ -1,6 +1,6 @@
-# LibraTrack - Backend
+# LibraTrack - Backend (PHP)
 
-LibraTrack Backend is a Django REST API for a library management platform. It
+LibraTrack Backend is a plain PHP REST API for a library management platform. It
 stores and serves the data used by the React frontend: users, roles, books,
 members, borrowing transactions, reservations, fines, notifications, reports, and
 library settings.
@@ -33,54 +33,34 @@ own account.
 
 | Layer | Technology |
 |---|---|
-| Framework | Django 4.2 |
-| API layer | Django REST Framework 3.15 |
-| Database | MySQL 8 via PyMySQL |
-| Authentication | Custom JWT with PyJWT and bcrypt |
-| Config | python-decouple |
-| CORS | django-cors-headers |
-| Testing | pytest + pytest-django |
+| Language | PHP 8.2+ |
+| Framework | Plain PHP with custom HTTP core |
+| Database | MySQL 8 via PDO |
+| Authentication | Custom JWT with php-jwt and password_hash |
+| Config | Dotenv via vlucas/phpdotenv |
+| HTTP | PDO for database connection pooling |
+| Testing | PHPUnit 11 |
 
 ---
 
 ## Prerequisites
 
-- Python 3.11 or later.
+- PHP 8.2 or later.
+- Composer (PHP package manager).
 - MySQL 8.0 or later.
 - A MySQL database and user with privileges on that database.
-- Internet access only if you want to import books from Open Library.
 
 ---
 
-## Local Setup
+## Local Setup (PHP)
 
-### 1. Create and activate a virtual environment
-
-```bash
-python -m venv venv
-source venv/bin/activate
-```
-
-On Windows:
+### 1. Install dependencies
 
 ```bash
-venv\Scripts\activate
+composer install
 ```
 
-### 2. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-If your MySQL account uses `caching_sha2_password` and PyMySQL reports that the
-`cryptography` package is required, install it in the same virtual environment:
-
-```bash
-pip install cryptography
-```
-
-### 3. Configure environment
+### 2. Configure environment
 
 ```bash
 cp .env.example .env
@@ -89,42 +69,43 @@ cp .env.example .env
 Example local `.env`:
 
 ```env
-SECRET_KEY=dev-secret-key-change-in-production
-DEBUG=True
-DATABASE_NAME=libratrack
-DATABASE_USER=libratrack_user
-DATABASE_PASSWORD=libratrack_pass
-DATABASE_HOST=localhost
-DATABASE_PORT=3306
-CORS_ALLOWED_ORIGINS=http://localhost:5173
-ALLOWED_HOSTS=localhost,127.0.0.1
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=libratrack_php
+DB_USER=root
+DB_PASSWORD=
+
+JWT_SECRET=dev-secret-key-change-in-production
+JWT_ACCESS_TTL_MINUTES=15
+JWT_REFRESH_TTL_DAYS=7
+COOKIE_SECURE=false
 ```
 
-### 4. Create the local MySQL database
+### 3. Create the local MySQL database
 
 ```sql
-CREATE DATABASE libratrack CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE libratrack_php CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'libratrack_user'@'localhost' IDENTIFIED BY 'libratrack_pass';
-GRANT ALL PRIVILEGES ON libratrack.* TO 'libratrack_user'@'localhost';
+GRANT ALL PRIVILEGES ON libratrack_php.* TO 'libratrack_user'@'localhost';
 ```
 
 If the user already exists, reset the password instead:
 
 ```sql
 ALTER USER 'libratrack_user'@'localhost' IDENTIFIED BY 'libratrack_pass';
-GRANT ALL PRIVILEGES ON libratrack.* TO 'libratrack_user'@'localhost';
+GRANT ALL PRIVILEGES ON libratrack_php.* TO 'libratrack_user'@'localhost';
 ```
 
-### 5. Run migrations
+### 4. Run migrations
 
 ```bash
-python manage.py migrate
+php database/migrate.php
 ```
 
-### 6. Seed baseline demo data
+### 5. Seed baseline demo data
 
 ```bash
-python manage.py seed
+php database/seed.php
 ```
 
 The seed command creates the small demo dataset needed to log in and test the
@@ -135,52 +116,12 @@ main workflows:
 | Roles | 3 | `admin`, `librarian`, `member` |
 | Staff accounts | 2 | Admin and librarian |
 | Member accounts | 2 | Alice and Bob |
-| Categories | 6 | Fiction, Non-Fiction, Science, History, Technology, Arts |
-| Books | 10 | Baseline manually curated titles |
 | Library settings | 4 | Fine rate, borrow days, book limit, reservation expiry |
-| Transactions | 2 | One active borrow and one returned late transaction |
-| Fines | 1 | Late-return fine |
-| Reservations | 1 | Pending reservation |
-| Notifications | 3 | Borrow, fine, and reservation examples |
 
-### 7. Optional: import 500 Open Library books
+### 6. Start the built-in PHP server
 
 ```bash
-python manage.py import_openlibrary_books --limit 500 --copies 50
-```
-
-If Open Library is slow or Python networking times out on Windows, use the
-curl-backed importer with a smaller page size:
-
-```bash
-python manage.py import_openlibrary_books --limit 500 --copies 50 --skip-work-details --http-client curl --timeout 60 --retries 6 --page-size 25
-```
-
-This imports book records into the local `books` table. The frontend does not
-call Open Library directly during browsing; it reads the imported records from
-`/api/books/`.
-
-Imported fields include:
-
-- Title, author, ISBN, publisher, published year, category.
-- `total_copies = 50` and `available_copies = 50`.
-- Cover URL.
-- Open Library work key.
-- Synopsis when available.
-- Subjects/tags.
-- Language codes.
-- Edition count.
-- Rating average and rating count.
-- Want-to-read, currently-reading, and already-read popularity counts.
-
-The importer skips invalid records and duplicate ISBNs. It fetches search results
-by topic and, unless `--skip-work-details` is passed, fetches work-level details
-for richer synopsis and subject data.
-
-### 8. Start the API server
-
-```bash
-python manage.py runserver
+php -S localhost:8000 -t public
 ```
 
 The API will be available at:
@@ -189,11 +130,34 @@ The API will be available at:
 http://localhost:8000/api/
 ```
 
+### 7. Apache/XAMPP Alternative
+
+If serving from Apache/XAMPP, point the document root to the `public/` directory
+when possible. If you must serve from the project root, the `public/.htaccess`
+file rewrites `/api` routes to `public/index.php`.
+
+### 8. Docker Compose Alternative
+
+```bash
+docker compose up --build
+```
+
+Then run setup commands inside the PHP container:
+
+```bash
+docker compose exec web php database/migrate.php
+docker compose exec web php database/seed.php
+```
+
+The Compose file starts MySQL 8 and the PHP built-in server. It overrides the
+database connection to use the `db` service host, so local `.env` can stay
+focused on non-Docker development.
+
 ---
 
 ## Demo Credentials
 
-Created by `python manage.py seed`:
+Created by `php database/seed.php`:
 
 | Role | Email | Password |
 |---|---|---|
@@ -209,65 +173,48 @@ Created by `python manage.py seed`:
 To clear local data and rebuild the demo state:
 
 ```bash
-python manage.py flush --no-input
-python manage.py migrate
-python manage.py seed
-python manage.py import_openlibrary_books --limit 500 --copies 50
+php database/migrate.php down
+php database/migrate.php
+php database/seed.php
 ```
 
-Skip the import command if you only need the small baseline catalog.
-
----
-
-## Environment Variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `SECRET_KEY` | `dev-secret-key-change-in-production` | Django signing key; override outside local development |
-| `DEBUG` | `False` | Enables Django debug mode |
-| `DATABASE_NAME` | `libratrack` | MySQL schema name |
-| `DATABASE_USER` | `libratrack_user` | MySQL username |
-| `DATABASE_PASSWORD` | `libratrack_pass` | MySQL password |
-| `DATABASE_HOST` | `localhost` | MySQL host |
-| `DATABASE_PORT` | `3306` | MySQL port |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated allowed frontend origins |
-| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Comma-separated Django hostnames |
-
-For temporary tunnel testing, add the public tunnel origin to
-`CORS_ALLOWED_ORIGINS` and the tunnel hostname to `ALLOWED_HOSTS` if the backend
-is exposed directly. If the frontend proxies `/api` to the local backend, the
-backend can usually keep `localhost,127.0.0.1`.
+Open Library import is available through `scripts/import_openlibrary_books.php`.
+Run it after migrations/seed data when you want the larger demo catalog.
 
 ---
 
 ## Project Structure
 
+> Reflects the PHP backend through Phase 5: core/auth/settings, catalog,
+> members, circulation, reservations, fines, notifications, reports, and CSV
+> export.
+
 ```text
-apps/
-├── auth_app/        Users, roles, JWT tokens, refresh tokens, signup
-├── books/           Catalog, Open Library importer, book metadata
-├── categories/      Dynamic book categories
-├── members/         Member profiles and member-scoped history
-├── transactions/    Borrow and return records
-├── reservations/    Book reservation lifecycle
-├── fines/           Paid, unpaid, and waived fines
-├── notifications/   In-app notifications and reminders
-├── reports/         Summary, inventory, borrowing, fines, members, export
-└── settings_app/    Configurable library rules
+public/
+├── index.php        Front controller
+└── .htaccess        Apache/XAMPP rewrite to index.php
 
-libratrack/
-├── settings/
-│   ├── base.py      Shared settings
-│   ├── dev.py       Local development settings
-│   └── test.py      Test settings
-└── urls.py          Root API routing
+src/
+├── Core/             Config, Database, Request, Response, Router, App
+├── Middleware/       AuthMiddleware, RoleMiddleware
+├── Controllers/      Auth, catalog, member, circulation, notification, report controllers
+├── Repositories/     Data access for users, books, members, transactions, fines, reports
+├── Services/         PasswordService, TokenService, AuthService, Open Library services
+└── routes.php        Route table
 
-shared/
-├── pagination.py    Standard pagination response
-└── response.py      Response envelope and exception handler
+database/
+├── migrations/       PHP migration files
+├── migrate.php       Migration runner
+└── seed.php          Demo data seeder
 
-tests/               pytest test suite
+tests/
+├── Core/             Core class unit tests
+├── Services/         Service unit tests
+└── Feature/          Endpoint integration tests
 ```
+
+The retired backend files were removed after the PHP API reached full contract
+parity with the React frontend.
 
 ---
 
@@ -315,7 +262,8 @@ can include `activeBorrowCount`, `maxBooks`, and `remainingSlots`.
 
 ## API Overview
 
-All endpoints are prefixed with `/api`.
+All endpoints are prefixed with `/api`. This documents the PHP backend contract
+used by the existing React frontend.
 
 ### Authentication
 
@@ -337,12 +285,19 @@ All endpoints are prefixed with `/api`.
 | POST | `/books/` | Create a book |
 | GET | `/books/{id}/` | Retrieve a book |
 | PATCH | `/books/{id}/` | Update a book |
+| PUT | `/books/{id}/` | Update a book (see PUT/PATCH note below) |
 | DELETE | `/books/{id}/` | Delete a book |
 | GET | `/categories/` | List categories with book counts |
 | POST | `/categories/` | Create a category |
 | GET | `/categories/{id}/` | Retrieve a category |
 | PATCH | `/categories/{id}/` | Update a category |
+| PUT | `/categories/{id}/` | Update a category (see PUT/PATCH note below) |
 | DELETE | `/categories/{id}/` | Delete a category |
+
+> **PUT/PATCH note:** for both books and categories, `PUT` and `PATCH` behave
+> identically here — both perform a partial update (only the fields present in
+> the request body are changed). This is a deliberate simplification versus
+> strict full-replacement semantics, where every writable field must be present.
 
 ### Members
 
@@ -427,13 +382,13 @@ Supported export reports: `borrowing`, `inventory`, `fines`, `members`,
 | GET | `/notifications/` | List notifications for the current user |
 | PATCH | `/notifications/{id}/read/` | Mark one notification as read |
 | PATCH | `/notifications/read-all/` | Mark all notifications as read |
-| POST | `/notifications/remind/` | Generate/send overdue reminders |
+| POST | `/notifications/remind/` | Generate overdue reminders for overdue transactions |
 
 ---
 
 ## Authentication Details
 
-- Access tokens are JWTs signed with `SECRET_KEY` using HS256.
+- Access tokens are JWTs signed with `JWT_SECRET` using HS256.
 - Access token payload includes `sub`, `email`, `role`, `iat`, and `exp`.
 - Access tokens last 15 minutes.
 - Refresh tokens are random 64-character hex values.
@@ -444,84 +399,69 @@ Supported export reports: `borrowing`, `inventory`, `fines`, `members`,
 
 ---
 
-## Management Commands
+## Database Commands
 
 | Command | Description |
 |---|---|
-| `python manage.py seed` | Create demo roles, accounts, baseline books, settings, transactions, fines, reservations, and notifications |
-| `python manage.py import_openlibrary_books --limit 500 --copies 50` | Import Open Library books into the local catalog |
-| `python manage.py import_openlibrary_books --limit 500 --copies 50 --skip-work-details --http-client curl --timeout 60 --retries 6 --page-size 25` | More reliable import for slow Open Library responses or Windows networking timeouts |
-| `python manage.py mark_overdue` | Mark active transactions past due date as overdue |
+| `php database/migrate.php` | Create all PHP backend tables |
+| `php database/seed.php` | Create demo roles, accounts, and library settings |
 
-Run `mark_overdue` on a schedule in a longer-lived environment so overdue status
-stays accurate.
+## Open Library Import
+
+```bash
+php scripts/import_openlibrary_books.php --limit=500 --copies=50
+```
+
+Reliability options:
+
+```bash
+php scripts/import_openlibrary_books.php --limit=500 --copies=50 --skip-work-details --timeout=60 --retries=6 --page-size=25
+```
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--limit` | 500 | Total books to import across all topics |
+| `--copies` | 50 | Copies created per imported book |
+| `--page-size` | 50 | Results per Open Library API page |
+| `--timeout` | 30 | HTTP timeout in seconds |
+| `--retries` | 5 | Retry attempts per page fetch |
+| `--skip-work-details` | off | Skip per-work synopsis/subject enrichment for a faster import |
 
 ---
 
 ## Running Tests
 
 ```bash
-pytest
+vendor/bin/phpunit
 ```
 
 Run a focused file:
 
 ```bash
-pytest tests/test_transactions.py -v
+vendor/bin/phpunit tests/Feature/AuthEndpointTest.php
 ```
-
-Tests use the SQLite-backed test settings in `libratrack/settings/test.py`, so a
-local MySQL database is not required for the test suite.
 
 ---
 
-## Docker
+## Environment Variables (PHP Runtime)
 
-The repo includes a `Dockerfile` and `docker-compose.yml` with:
-
-| Service | Purpose | Port |
+| Variable | Default | Description |
 |---|---|---|
-| `db` | MySQL database | 3306 |
-| `web` | Django API | 8000 |
+| `JWT_SECRET` | `dev-secret-key-change-in-production` | JWT signing key; override outside local development |
+| `JWT_ACCESS_TTL_MINUTES` | `15` | Access token lifetime in minutes |
+| `JWT_REFRESH_TTL_DAYS` | `7` | Refresh token lifetime in days |
+| `DB_NAME` | `libratrack_php` | MySQL schema name |
+| `DB_USER` | `root` | MySQL username |
+| `DB_PASSWORD` | (empty) | MySQL password |
+| `DB_HOST` | `127.0.0.1` | MySQL host |
+| `DB_PORT` | `3306` | MySQL port |
+| `COOKIE_SECURE` | `false` | Set to `true` in production with HTTPS |
 
-Create `.env` for Docker:
+---
 
-```env
-SECRET_KEY=dev-secret-key-change-in-production
-DEBUG=True
-DATABASE_NAME=libratrack
-DATABASE_USER=libratrack_user
-DATABASE_PASSWORD=libratrack_pass
-DATABASE_HOST=db
-DATABASE_PORT=3306
-CORS_ALLOWED_ORIGINS=http://localhost:5173
-ALLOWED_HOSTS=localhost,127.0.0.1
-```
+## Known Deferred Work
 
-`DATABASE_HOST` must be `db` inside Docker Compose.
-
-Start services:
-
-```bash
-docker compose up --build
-```
-
-Run setup commands in another terminal:
-
-```bash
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py seed
-docker compose exec web python manage.py import_openlibrary_books --limit 500 --copies 50
-```
-
-Stop services:
-
-```bash
-docker compose down
-```
-
-Delete the database volume too:
-
-```bash
-docker compose down -v
-```
+The PHP backend now covers the prototype contract through notifications,
+reports, and CSV exports. Optional hardening beyond prototype scope includes
+richer audit logs, production error logging, and deployment-specific
+cache/session configuration.
