@@ -1,0 +1,9 @@
+.git
+.env
+.env.*
+!.env.example
+.DS_Store
+.phpunit.result.cache
+.phpunit.cache/
+.superpowers/
+vendor/

@@ -290,9 +290,8 @@ final class TransactionEndpointTest extends TestCase
      * *later* than the current time-of-day (due date's clock time is 1 hour
      * ahead of now's clock time). Under the old `$now->diff($dueDate)->days`
      * (full 24-hour-period truncation) this yields only 2 complete days late,
-     * but under Django's `(now.date() - due_date.date()).days` calendar-day
-     * floor (which the PHP code must match) it yields 3 days late. This
-     * exercises the exact divergence described in Finding 3.
+     * but calendar-day floor yields 3 days late. This exercises the exact
+     * divergence described in Finding 3.
      */
     public function testReturnOverdueTransactionUsesCalendarDayCountNotFullDatetimeDiff(): void
     {

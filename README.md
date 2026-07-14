@@ -9,8 +9,6 @@ The backend is designed for a prototype-ready library system where staff can
 manage day-to-day circulation and members can browse, reserve, and manage their
 own account.
 
-**Note:** This is the PHP rewrite of the original Django backend.
-
 ---
 
 ## Core Capabilities
@@ -86,16 +84,16 @@ COOKIE_SECURE=false
 ### 3. Create the local MySQL database
 
 ```sql
-CREATE DATABASE libratrack CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE libratrack_php CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'libratrack_user'@'localhost' IDENTIFIED BY 'libratrack_pass';
-GRANT ALL PRIVILEGES ON libratrack.* TO 'libratrack_user'@'localhost';
+GRANT ALL PRIVILEGES ON libratrack_php.* TO 'libratrack_user'@'localhost';
 ```
 
 If the user already exists, reset the password instead:
 
 ```sql
 ALTER USER 'libratrack_user'@'localhost' IDENTIFIED BY 'libratrack_pass';
-GRANT ALL PRIVILEGES ON libratrack.* TO 'libratrack_user'@'localhost';
+GRANT ALL PRIVILEGES ON libratrack_php.* TO 'libratrack_user'@'localhost';
 ```
 
 ### 4. Run migrations
@@ -137,6 +135,23 @@ http://localhost:8000/api/
 If serving from Apache/XAMPP, point the document root to the `public/` directory
 when possible. If you must serve from the project root, the `public/.htaccess`
 file rewrites `/api` routes to `public/index.php`.
+
+### 8. Docker Compose Alternative
+
+```bash
+docker compose up --build
+```
+
+Then run setup commands inside the PHP container:
+
+```bash
+docker compose exec web php database/migrate.php
+docker compose exec web php database/seed.php
+```
+
+The Compose file starts MySQL 8 and the PHP built-in server. It overrides the
+database connection to use the `db` service host, so local `.env` can stay
+focused on non-Docker development.
 
 ---
 
@@ -198,9 +213,8 @@ tests/
 └── Feature/          Endpoint integration tests
 ```
 
-The Django backend (`apps/`, `libratrack/`, `manage.py`, pytest `tests/`)
-remains in this repo as behavior reference during the rewrite and will be
-removed once PHP reaches full contract parity.
+The retired backend files were removed after the PHP API reached full contract
+parity with the React frontend.
 
 ---
 
@@ -249,8 +263,7 @@ can include `activeBorrowCount`, `maxBooks`, and `remainingSlots`.
 ## API Overview
 
 All endpoints are prefixed with `/api`. This documents the PHP backend contract
-through Phase 5, carried over from the Django reference and matched to the
-existing frontend.
+used by the existing React frontend.
 
 ### Authentication
 
@@ -284,8 +297,7 @@ existing frontend.
 > **PUT/PATCH note:** for both books and categories, `PUT` and `PATCH` behave
 > identically here — both perform a partial update (only the fields present in
 > the request body are changed). This is a deliberate simplification versus
-> the Django reference implementation, whose `PUT` requires every writable
-> field to be present and rejects an incomplete body with 400.
+> strict full-replacement semantics, where every writable field must be present.
 
 ### Members
 
@@ -391,7 +403,7 @@ Supported export reports: `borrowing`, `inventory`, `fines`, `members`,
 
 | Command | Description |
 |---|---|
-| `php database/migrate.php` | Create core auth and settings tables |
+| `php database/migrate.php` | Create all PHP backend tables |
 | `php database/seed.php` | Create demo roles, accounts, and library settings |
 
 ## Open Library Import
@@ -450,11 +462,6 @@ vendor/bin/phpunit tests/Feature/AuthEndpointTest.php
 ## Known Deferred Work
 
 The PHP backend now covers the prototype contract through notifications,
-reports, and CSV exports. Remaining backend rewrite work:
-
-- Final removal of the Django backend files after one last parity check.
-- Optional hardening beyond prototype scope: richer audit logs, production
-  error logging, and deployment-specific cache/session configuration.
-
-See `docs/superpowers/specs/2026-07-13-php-backend-rewrite-design.md` and the
-phase plans under `docs/superpowers/plans/` for the full roadmap.
+reports, and CSV exports. Optional hardening beyond prototype scope includes
+richer audit logs, production error logging, and deployment-specific
+cache/session configuration.

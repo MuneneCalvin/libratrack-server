@@ -206,14 +206,14 @@ curl -X DELETE http://localhost:8000/api/books/1/ \
 Run this from the backend project root:
 
 ```bash
-python manage.py import_openlibrary_books --limit 500 --copies 50
+php scripts/import_openlibrary_books.php --limit=500 --copies=50
 ```
 
-If Open Library is slow or Python networking times out, use the curl-backed
-variant:
+If Open Library is slow, lower the page size, raise timeout/retries, and skip
+per-work detail requests:
 
 ```bash
-python manage.py import_openlibrary_books --limit 500 --copies 50 --skip-work-details --http-client curl --timeout 60 --retries 6 --page-size 25
+php scripts/import_openlibrary_books.php --limit=500 --copies=50 --skip-work-details --timeout=60 --retries=6 --page-size=25
 ```
 
 Options:
@@ -225,7 +225,6 @@ Options:
 | `--page-size` | `50` | Number of Open Library search results requested per page. Lower values can avoid slow responses. |
 | `--timeout` | `30` | Seconds allowed for each Open Library request. |
 | `--retries` | `5` | Number of attempts before skipping a failed query or work-detail request. |
-| `--http-client` | `auto` | Use `auto`, `urllib`, or `curl`. Auto uses curl when it is available. |
 | `--skip-work-details` | off | Skip per-work detail requests for faster imports without synopsis enrichment. |
 
 The command imports local `Book` records, creates missing categories, stores

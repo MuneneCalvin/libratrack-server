@@ -1,48 +1,29 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.pyc
-*.so
+# Dependencies
+/vendor/
 
-# Virtual environment
-venv/
-.venv/
-env/
-.env/
-
-# Environment variables
+# Environment
 .env
 .env.*
 !.env.example
+*.env.docker
 
-# Django
+# Runtime
 *.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-media/
+.phpunit.result.cache
+/.phpunit.cache/
 
-# Distribution / packaging
+# Build output
 dist/
 build/
-*.egg-info/
-*.egg
-.eggs/
-wheels/
 
-# Testing
-.pytest_cache/
+# Test coverage
 .coverage
 coverage.xml
 htmlcov/
-.tox/
 
-# Type checking
-.mypy_cache/
-.dmypy.json
-dmypy.json
+# Local docs/work notes
+/docs
+docs
 
 # IDEs
 .idea/
@@ -55,13 +36,3 @@ dmypy.json
 .DS_Store
 .AppleDouble
 .LSOverride
-
-# Docker
-*.env.docker
-
-# Static / collected files
-staticfiles/
-static_root/
-/vendor/
-/.env
-/.phpunit.cache/
