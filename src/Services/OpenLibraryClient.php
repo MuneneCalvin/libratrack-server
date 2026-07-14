@@ -71,8 +71,6 @@ final class OpenLibraryClient
         $body = curl_exec($handle);
         $statusCode = curl_getinfo($handle, CURLINFO_HTTP_CODE);
         $error = curl_error($handle);
-        curl_close($handle);
-
         if ($body === false || $error !== '' || $statusCode >= 400) {
             return null;
         }
