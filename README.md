@@ -418,6 +418,13 @@ Reliability options:
 php scripts/import_openlibrary_books.php --limit=500 --copies=50 --skip-work-details --timeout=60 --retries=6 --page-size=25
 ```
 
+If Windows PHP reports an SSL certificate error in the import output, rerun the
+local demo import with explicit SSL verification disabled:
+
+```bash
+php scripts/import_openlibrary_books.php --limit=500 --copies=50 --skip-work-details --timeout=60 --retries=6 --page-size=25 --insecure
+```
+
 | Flag | Default | Purpose |
 |---|---|---|
 | `--limit` | 500 | Total books to import across all topics |
@@ -426,6 +433,7 @@ php scripts/import_openlibrary_books.php --limit=500 --copies=50 --skip-work-det
 | `--timeout` | 30 | HTTP timeout in seconds |
 | `--retries` | 5 | Retry attempts per page fetch |
 | `--skip-work-details` | off | Skip per-work synopsis/subject enrichment for a faster import |
+| `--insecure` | off | Disable SSL verification for local Windows PHP setups missing a CA bundle |
 
 ---
 

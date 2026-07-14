@@ -38,13 +38,14 @@ $pageSize = parseIntOption($argv, 'page-size', 50);
 $timeout = parseIntOption($argv, 'timeout', 30);
 $retries = parseIntOption($argv, 'retries', 5);
 $skipWorkDetails = hasFlag($argv, 'skip-work-details');
+$verifySsl = !hasFlag($argv, 'insecure');
 
 $root = dirname(__DIR__);
 $config = Config::fromProjectRoot($root);
 $pdo = Database::fromConfig($config)->pdo();
 
 $service = new OpenLibraryImportService(
-    new OpenLibraryClient($timeout, $retries),
+    new OpenLibraryClient($timeout, $retries, $verifySsl),
     new CategoryRepository($pdo),
     new BookRepository($pdo)
 );
@@ -61,3 +62,10 @@ echo "Skipped duplicates: {$result['duplicates']}\n";
 echo "Skipped invalid: {$result['invalid']}\n";
 echo "Categories created: {$result['categoriesCreated']}\n";
 echo "Work detail failures: {$result['detailFailures']}\n";
+echo "Query failures: {$result['queryFailures']}\n";
+foreach (array_slice($result['errors'], 0, 5) as $error) {
+    echo "Open Library query failed: {$error}\n";
+}
+if (count($result['errors']) > 5) {
+    echo 'Additional query failures: ' . (count($result['errors']) - 5) . "\n";
+}

@@ -216,6 +216,13 @@ per-work detail requests:
 php scripts/import_openlibrary_books.php --limit=500 --copies=50 --skip-work-details --timeout=60 --retries=6 --page-size=25
 ```
 
+If Windows PHP cannot verify Open Library's SSL certificate, the command prints
+the cURL error. For local demo imports only, rerun with:
+
+```bash
+php scripts/import_openlibrary_books.php --limit=500 --copies=50 --skip-work-details --timeout=60 --retries=6 --page-size=25 --insecure
+```
+
 Options:
 
 | Option | Default | Description |
@@ -226,6 +233,7 @@ Options:
 | `--timeout` | `30` | Seconds allowed for each Open Library request. |
 | `--retries` | `5` | Number of attempts before skipping a failed query or work-detail request. |
 | `--skip-work-details` | off | Skip per-work detail requests for faster imports without synopsis enrichment. |
+| `--insecure` | off | Disable SSL verification for local Windows PHP setups missing a CA bundle. |
 
 The command imports local `Book` records, creates missing categories, stores
 `cover_url`, synopsis, subjects/tags, language codes, edition counts, ratings,

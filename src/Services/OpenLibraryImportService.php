@@ -43,6 +43,8 @@ final class OpenLibraryImportService
         $invalid = 0;
         $categoriesCreated = 0;
         $detailFailures = 0;
+        $queryFailures = 0;
+        $errors = [];
 
         foreach (self::TOPIC_QUERIES as [$categoryName, $query]) {
             if ($imported >= $limit) {
@@ -59,6 +61,11 @@ final class OpenLibraryImportService
             while ($imported < $limit) {
                 $docs = $this->client->searchDocs($query, $page, $pageSize);
                 if ($docs === []) {
+                    $lastError = $this->client->lastError();
+                    if ($lastError !== null) {
+                        $queryFailures++;
+                        $errors[] = "{$query} page {$page}: {$lastError}";
+                    }
                     break;
                 }
 
@@ -105,6 +112,8 @@ final class OpenLibraryImportService
             'invalid' => $invalid,
             'categoriesCreated' => $categoriesCreated,
             'detailFailures' => $detailFailures,
+            'queryFailures' => $queryFailures,
+            'errors' => $errors,
         ];
     }
 }
