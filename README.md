@@ -163,17 +163,16 @@ php database/migrate.php
 php database/seed.php
 ```
 
-Open Library import is not implemented yet for the PHP backend (planned for a
-later phase); see Known Deferred Work below.
+Open Library import is available through `scripts/import_openlibrary_books.php`.
+Run it after migrations/seed data when you want the larger demo catalog.
 
 ---
 
 ## Project Structure
 
-> Reflects Phase 1 (core + auth + settings) only. Additional `src/Controllers`,
-> `src/Repositories`, and `src/Services` files will be added as later phases
-> implement books, members, transactions, reservations, fines, notifications,
-> and reports.
+> Reflects the PHP backend through Phase 5: core/auth/settings, catalog,
+> members, circulation, reservations, fines, notifications, reports, and CSV
+> export.
 
 ```text
 public/
@@ -181,11 +180,11 @@ public/
 └── .htaccess        Apache/XAMPP rewrite to index.php
 
 src/
-├── Core/            Config, Database, Request, Response, Router, App
+├── Core/             Config, Database, Request, Response, Router, App
 ├── Middleware/       AuthMiddleware, RoleMiddleware
-├── Controllers/      AuthController, SettingsController
-├── Repositories/      UserRepository, RefreshTokenRepository, MemberRepository, SettingsRepository
-├── Services/         PasswordService, TokenService, AuthService
+├── Controllers/      Auth, catalog, member, circulation, notification, report controllers
+├── Repositories/     Data access for users, books, members, transactions, fines, reports
+├── Services/         PasswordService, TokenService, AuthService, Open Library services
 └── routes.php        Route table
 
 database/
@@ -249,11 +248,9 @@ can include `activeBorrowCount`, `maxBooks`, and `remainingSlots`.
 
 ## API Overview
 
-All endpoints are prefixed with `/api`. This documents the full target contract
-carried over from the Django backend; only **Authentication** and
-**Settings and Notifications → `/settings/`** are implemented in the PHP
-backend as of Phase 1. The remaining sections describe work planned for later
-phases (see Known Deferred Work).
+All endpoints are prefixed with `/api`. This documents the PHP backend contract
+through Phase 5, carried over from the Django reference and matched to the
+existing frontend.
 
 ### Authentication
 
@@ -373,7 +370,7 @@ Supported export reports: `borrowing`, `inventory`, `fines`, `members`,
 | GET | `/notifications/` | List notifications for the current user |
 | PATCH | `/notifications/{id}/read/` | Mark one notification as read |
 | PATCH | `/notifications/read-all/` | Mark all notifications as read |
-| POST | `/notifications/remind/` | Generate/send overdue reminders |
+| POST | `/notifications/remind/` | Generate overdue reminders for overdue transactions |
 
 ---
 
@@ -452,15 +449,12 @@ vendor/bin/phpunit tests/Feature/AuthEndpointTest.php
 
 ## Known Deferred Work
 
-Phase 1 (this state) covers core HTTP plumbing, auth, and settings only. Not
-yet implemented in the PHP backend:
+The PHP backend now covers the prototype contract through notifications,
+reports, and CSV exports. Remaining backend rewrite work:
 
-- Books, categories, Open Library import.
-- Members list/detail/manual creation beyond auth signup.
-- Transactions, returns, reservations, fines, notifications, reports.
-- Wiring `AuthMiddleware`/`RoleMiddleware` into route-level auth/role checks
-  (classes exist; routes currently do inline checks in controllers).
-- Final removal of the Django backend files.
+- Final removal of the Django backend files after one last parity check.
+- Optional hardening beyond prototype scope: richer audit logs, production
+  error logging, and deployment-specific cache/session configuration.
 
 See `docs/superpowers/specs/2026-07-13-php-backend-rewrite-design.md` and the
 phase plans under `docs/superpowers/plans/` for the full roadmap.
