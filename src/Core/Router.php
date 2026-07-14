@@ -9,6 +9,10 @@ final class Router
     /** @var array<int, array{method: string, pattern: string, regex: string, handler: callable}> */
     private array $routes = [];
 
+    public function __construct(private readonly bool $debug = false)
+    {
+    }
+
     public function add(string $method, string $pattern, callable $handler): void
     {
         $regex = preg_quote($pattern, '#');
@@ -36,8 +40,15 @@ final class Router
                 return ($route['handler'])($request, $params);
             } catch (ValidationException $exception) {
                 return Response::error($exception->getMessage(), $exception->statusCode, $exception->extra);
-            } catch (\Throwable) {
-                return Response::error('Internal server error', 500);
+            } catch (\Throwable $exception) {
+                $extra = $this->debug ? [
+                    'detail' => $exception->getMessage(),
+                    'exception' => $exception::class,
+                    'file' => $exception->getFile(),
+                    'line' => $exception->getLine(),
+                ] : [];
+
+                return Response::error('Internal server error', 500, $extra);
             }
         }
 

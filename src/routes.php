@@ -79,7 +79,7 @@ $reservationController = new ReservationController(
     $roleMiddleware
 );
 
-$router = new Router();
+$router = new Router($config->bool('APP_DEBUG', false));
 
 $router->add('GET', '/api/health/', function (Request $request, array $params): Response {
     return Response::success(['ok' => true]);
