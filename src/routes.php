@@ -7,6 +7,7 @@ use LibraTrack\Controllers\BookController;
 use LibraTrack\Controllers\CategoryController;
 use LibraTrack\Controllers\FineController;
 use LibraTrack\Controllers\MemberController;
+use LibraTrack\Controllers\NotificationController;
 use LibraTrack\Controllers\ReservationController;
 use LibraTrack\Controllers\SettingsController;
 use LibraTrack\Controllers\TransactionController;
@@ -21,6 +22,7 @@ use LibraTrack\Repositories\BookRepository;
 use LibraTrack\Repositories\CategoryRepository;
 use LibraTrack\Repositories\FineRepository;
 use LibraTrack\Repositories\MemberRepository;
+use LibraTrack\Repositories\NotificationRepository;
 use LibraTrack\Repositories\RefreshTokenRepository;
 use LibraTrack\Repositories\ReservationRepository;
 use LibraTrack\Repositories\SettingsRepository;
@@ -52,6 +54,8 @@ $memberController = new MemberController($members, $users, $passwords, $authMidd
 $transactionRepository = new TransactionRepository($pdo);
 $fineRepository = new FineRepository($pdo);
 $fineController = new FineController($fineRepository, $members, $authMiddleware, $roleMiddleware);
+$notificationRepository = new NotificationRepository($pdo);
+$notificationController = new NotificationController($notificationRepository, $authMiddleware, $roleMiddleware);
 $transactionController = new TransactionController(
     $transactionRepository,
     $fineRepository,
@@ -123,5 +127,9 @@ $router->add('GET', '/api/fines/{id}/', fn (Request $request, array $params): Re
 $router->add('PATCH', '/api/fines/{id}/pay/', fn (Request $request, array $params): Response => $fineController->pay($request, $params));
 $router->add('PATCH', '/api/fines/{id}/waive/', fn (Request $request, array $params): Response => $fineController->waive($request, $params));
 $router->add('GET', '/api/members/{id}/fines/', fn (Request $request, array $params): Response => $fineController->forMember($request, $params));
+$router->add('GET', '/api/notifications/', fn (Request $request, array $params): Response => $notificationController->index($request));
+$router->add('PATCH', '/api/notifications/read-all/', fn (Request $request, array $params): Response => $notificationController->markAllRead($request));
+$router->add('POST', '/api/notifications/remind/', fn (Request $request, array $params): Response => $notificationController->remind($request));
+$router->add('PATCH', '/api/notifications/{id}/read/', fn (Request $request, array $params): Response => $notificationController->markRead($request, $params));
 
 return $router;
