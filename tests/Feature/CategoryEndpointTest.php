@@ -70,7 +70,7 @@ final class CategoryEndpointTest extends TestCase
     public function testAdminCanCreateListGetUpdateAndDeleteCategory(): void
     {
         $router = $this->router();
-        $name = 'Test Category ' . bin2hex(random_bytes(4));
+        $name = '0000 Test Category ' . bin2hex(random_bytes(4));
 
         $create = $router->dispatch(new Request(
             'POST',
