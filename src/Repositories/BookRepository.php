@@ -104,24 +104,6 @@ final class BookRepository
         $statement->execute([$id]);
     }
 
-    public function decrementAvailableCopy(int $bookId): bool
-    {
-        $statement = $this->pdo->prepare(
-            'UPDATE books SET available_copies = available_copies - 1 WHERE id = ? AND available_copies > 0'
-        );
-        $statement->execute([$bookId]);
-
-        return $statement->rowCount() > 0;
-    }
-
-    public function incrementAvailableCopy(int $bookId): void
-    {
-        $statement = $this->pdo->prepare(
-            'UPDATE books SET available_copies = LEAST(total_copies, available_copies + 1) WHERE id = ?'
-        );
-        $statement->execute([$bookId]);
-    }
-
     private function toRow(array $data): array
     {
         return [

@@ -313,6 +313,97 @@ final class ReservationEndpointTest extends TestCase
         $this->assertSame(0, (int) $available->fetchColumn());
     }
 
+    public function testIssuingSameApprovedReservationTwiceCreatesOnlyOneActiveBorrow(): void
+    {
+        $this->freeAllBorrowSlots();
+        $router = $this->router();
+        $bookId = $this->createBook();
+        $headers = ['authorization' => 'Bearer ' . self::$librarianToken, 'content-type' => 'application/json'];
+        $create = $router->dispatch(new Request('POST', '/api/reservations/', [], $headers, [], [
+            'bookId' => $bookId,
+            'memberId' => self::$memberId,
+        ]));
+        $reservationId = $create->payload['data']['id'];
+        $approve = $router->dispatch(new Request('PATCH', "/api/reservations/{$reservationId}/approve/", [], $headers, [], null));
+        $this->assertSame(200, $approve->statusCode);
+
+        $first = $router->dispatch(new Request('PATCH', "/api/reservations/{$reservationId}/issue/", [], $headers, [], null));
+        $second = $router->dispatch(new Request('PATCH', "/api/reservations/{$reservationId}/issue/", [], $headers, [], null));
+
+        $this->assertSame(200, $first->statusCode);
+        $this->assertSame('BORROWED', $first->payload['data']['status']);
+        $this->assertSame(400, $second->statusCode);
+        $this->assertSame('Reservation is not ready for pickup', $second->payload['message']);
+
+        $activeBorrowCount = self::$pdo->prepare(
+            "SELECT COUNT(*)
+             FROM transactions
+             JOIN transaction_items ON transaction_items.transaction_id = transactions.id
+             WHERE transactions.member_id = ?
+               AND transaction_items.book_id = ?
+               AND transactions.status = 'ACTIVE'
+               AND transaction_items.returned_at IS NULL"
+        );
+        $activeBorrowCount->execute([self::$memberId, $bookId]);
+        $this->assertSame(1, (int) $activeBorrowCount->fetchColumn());
+    }
+
+    public function testMemberCannotCancelReadyForPickupReservation(): void
+    {
+        $this->freeAllBorrowSlots();
+        $router = $this->router();
+        $bookId = $this->createBook();
+        $memberHeaders = ['authorization' => 'Bearer ' . self::$memberToken, 'content-type' => 'application/json'];
+        $staffHeaders = ['authorization' => 'Bearer ' . self::$librarianToken, 'content-type' => 'application/json'];
+        $create = $router->dispatch(new Request('POST', '/api/reservations/', [], $memberHeaders, [], ['bookId' => $bookId]));
+        $reservationId = $create->payload['data']['id'];
+        $approve = $router->dispatch(new Request('PATCH', "/api/reservations/{$reservationId}/approve/", [], $staffHeaders, [], null));
+        $this->assertSame(200, $approve->statusCode);
+
+        $response = $router->dispatch(new Request('PATCH', "/api/reservations/{$reservationId}/cancel/", [], $memberHeaders, [], null));
+
+        $this->assertSame(400, $response->statusCode);
+        $this->assertSame('Reservation cannot be cancelled', $response->payload['message']);
+
+        $reservationStatus = self::$pdo->prepare('SELECT status FROM reservations WHERE id = ?');
+        $reservationStatus->execute([$reservationId]);
+        $this->assertSame('READY_FOR_PICKUP', $reservationStatus->fetchColumn());
+
+        $available = self::$pdo->prepare('SELECT available_copies FROM books WHERE id = ?');
+        $available->execute([$bookId]);
+        $this->assertSame(0, (int) $available->fetchColumn());
+    }
+
+    public function testCancellingBorrowedReservationDoesNotReleaseCopy(): void
+    {
+        $this->freeAllBorrowSlots();
+        $router = $this->router();
+        $bookId = $this->createBook();
+        $headers = ['authorization' => 'Bearer ' . self::$librarianToken, 'content-type' => 'application/json'];
+        $create = $router->dispatch(new Request('POST', '/api/reservations/', [], $headers, [], [
+            'bookId' => $bookId,
+            'memberId' => self::$memberId,
+        ]));
+        $reservationId = $create->payload['data']['id'];
+        $approve = $router->dispatch(new Request('PATCH', "/api/reservations/{$reservationId}/approve/", [], $headers, [], null));
+        $this->assertSame(200, $approve->statusCode);
+        $issue = $router->dispatch(new Request('PATCH', "/api/reservations/{$reservationId}/issue/", [], $headers, [], null));
+        $this->assertSame(200, $issue->statusCode);
+
+        $response = $router->dispatch(new Request('PATCH', "/api/reservations/{$reservationId}/cancel/", [], $headers, [], null));
+
+        $this->assertSame(400, $response->statusCode);
+        $this->assertSame('Reservation cannot be cancelled', $response->payload['message']);
+
+        $reservationStatus = self::$pdo->prepare('SELECT status FROM reservations WHERE id = ?');
+        $reservationStatus->execute([$reservationId]);
+        $this->assertSame('BORROWED', $reservationStatus->fetchColumn());
+
+        $available = self::$pdo->prepare('SELECT available_copies FROM books WHERE id = ?');
+        $available->execute([$bookId]);
+        $this->assertSame(0, (int) $available->fetchColumn());
+    }
+
     public function testExpiredReadyReservationReleasesCopyAndCannotBeIssued(): void
     {
         $this->freeAllBorrowSlots();

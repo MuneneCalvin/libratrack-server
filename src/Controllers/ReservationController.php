@@ -106,13 +106,18 @@ final class ReservationController
             if ($member === null || (int) $member['id'] !== (int) $reservation['member_id']) {
                 throw new ValidationException('Forbidden', 403);
             }
+            if ($reservation['status'] !== 'PENDING') {
+                throw new ValidationException('Reservation cannot be cancelled');
+            }
         }
 
         if (!in_array($reservation['status'], ['PENDING', 'READY_FOR_PICKUP'], true)) {
             throw new ValidationException('Reservation cannot be cancelled');
         }
 
-        $this->reservations->cancelWithRelease($id);
+        if (!$this->reservations->cancelWithRelease($id)) {
+            throw new ValidationException('Reservation cannot be cancelled');
+        }
 
         return Response::success($this->toFrontend($this->reservations->find($id)));
     }
@@ -164,8 +169,17 @@ final class ReservationController
             throw new ValidationException('Reservation is not ready for pickup');
         }
 
-        $this->borrowing->issue((int) $reservation['member_id'], [(int) $reservation['book_id']], true);
-        $this->reservations->markBorrowed($id);
+        $issued = $this->reservations->issueReadyForPickup(
+            $id,
+            fn (array $lockedReservation): int => $this->borrowing->issue(
+                (int) $lockedReservation['member_id'],
+                [(int) $lockedReservation['book_id']],
+                true
+            )
+        );
+        if (!$issued) {
+            throw new ValidationException('Reservation is not ready for pickup');
+        }
 
         return Response::success($this->toFrontend($this->reservations->find($id)));
     }

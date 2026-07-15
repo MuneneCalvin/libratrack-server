@@ -97,7 +97,11 @@ final class TransactionRepository
 
     public function create(int $memberId, array $bookIds, DateTimeImmutable $dueDate, bool $decrementAvailability = true): int
     {
-        $this->pdo->beginTransaction();
+        $ownsTransaction = !$this->pdo->inTransaction();
+        if ($ownsTransaction) {
+            $this->pdo->beginTransaction();
+        }
+
         try {
             $statement = $this->pdo->prepare(
                 'INSERT INTO transactions (member_id, due_date, status) VALUES (?, ?, \'ACTIVE\')'
@@ -119,9 +123,13 @@ final class TransactionRepository
                 }
             }
 
-            $this->pdo->commit();
+            if ($ownsTransaction) {
+                $this->pdo->commit();
+            }
         } catch (\Throwable $exception) {
-            $this->pdo->rollBack();
+            if ($ownsTransaction && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw $exception;
         }
 

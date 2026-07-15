@@ -123,32 +123,73 @@ final class ReservationRepository
         }
     }
 
-    public function markBorrowed(int $id): void
+    public function issueReadyForPickup(int $id, callable $createBorrow): bool
     {
-        $statement = $this->pdo->prepare("UPDATE reservations SET status = 'BORROWED' WHERE id = ?");
-        $statement->execute([$id]);
-    }
-
-    public function cancelWithRelease(int $id): void
-    {
-        $reservation = $this->find($id);
-        if ($reservation === null) {
-            return;
-        }
-
         $this->pdo->beginTransaction();
         try {
+            $statement = $this->pdo->prepare('SELECT * FROM reservations WHERE id = ? FOR UPDATE');
+            $statement->execute([$id]);
+            $reservation = $statement->fetch();
+            if (!$reservation || $reservation['status'] !== 'READY_FOR_PICKUP') {
+                $this->pdo->commit();
+                return false;
+            }
+
+            $createBorrow($reservation);
+
+            $update = $this->pdo->prepare(
+                "UPDATE reservations SET status = 'BORROWED' WHERE id = ? AND status = 'READY_FOR_PICKUP'"
+            );
+            $update->execute([$id]);
+            if ($update->rowCount() === 0) {
+                $this->pdo->rollBack();
+                return false;
+            }
+
+            $this->pdo->commit();
+            return true;
+        } catch (\Throwable $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    public function cancelWithRelease(int $id): bool
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $statement = $this->pdo->prepare('SELECT id, book_id, status FROM reservations WHERE id = ? FOR UPDATE');
+            $statement->execute([$id]);
+            $reservation = $statement->fetch();
+            if (!$reservation || !in_array($reservation['status'], ['PENDING', 'READY_FOR_PICKUP'], true)) {
+                $this->pdo->commit();
+                return false;
+            }
+
+            $update = $this->pdo->prepare(
+                "UPDATE reservations SET status = 'CANCELLED' WHERE id = ? AND status = ?"
+            );
+            $update->execute([$id, $reservation['status']]);
+            if ($update->rowCount() === 0) {
+                $this->pdo->rollBack();
+                return false;
+            }
+
             if ($reservation['status'] === 'READY_FOR_PICKUP') {
-                $increment = $this->pdo->prepare(
+                $release = $this->pdo->prepare(
                     'UPDATE books SET available_copies = LEAST(total_copies, available_copies + 1) WHERE id = ?'
                 );
-                $increment->execute([(int) $reservation['book_id']]);
+                $release->execute([(int) $reservation['book_id']]);
             }
-            $statement = $this->pdo->prepare("UPDATE reservations SET status = 'CANCELLED' WHERE id = ?");
-            $statement->execute([$id]);
+
             $this->pdo->commit();
+            return true;
         } catch (\Throwable $exception) {
-            $this->pdo->rollBack();
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
             throw $exception;
         }
     }
