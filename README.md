@@ -336,8 +336,11 @@ Return selected items with:
 | GET | `/reservations/` | List reservations for admin/librarian users |
 | POST | `/reservations/` | Create a reservation |
 | GET | `/reservations/{id}/` | Retrieve a reservation |
-| PATCH | `/reservations/{id}/cancel/` | Cancel a reservation |
-| PATCH | `/reservations/{id}/fulfill/` | Fulfill/approve a reservation |
+| PATCH | `/reservations/{id}/approve/` | Approve reservation and hold one copy for pickup |
+| PATCH | `/reservations/{id}/issue/` | Issue approved pickup hold as an active borrow |
+| PATCH | `/reservations/{id}/cancel/` | Cancel reservation; ready pickup holds release their copy |
+
+`/reservations/{id}/fulfill/` remains as a compatibility alias for issuing a ready-for-pickup reservation. New clients should use `/issue/`.
 
 ### Fines
 

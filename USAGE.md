@@ -362,24 +362,35 @@ curl -X POST http://localhost:8000/api/reservations/ \
 
 ### List reservations
 
-Supports `status` (`PENDING`, `FULFILLED`, `CANCELLED`, `EXPIRED`), `page`, `limit`.
+Supports `status` (`PENDING`, `READY_FOR_PICKUP`, `BORROWED`, `EXPIRED`, `CANCELLED`), `page`, `limit`.
 
 ```bash
 curl "http://localhost:8000/api/reservations/?status=PENDING" \
   -H "Authorization: Bearer <TOKEN>"
 ```
 
-### Approve a reservation
+### Approve a reservation hold
 
 ```bash
-curl -X PATCH http://localhost:8000/api/reservations/5/fulfill/ \
+curl -X PATCH http://localhost:8000/api/reservations/5/approve/ \
   -H "Authorization: Bearer <TOKEN>"
 ```
+
+This changes the reservation to `READY_FOR_PICKUP`, holds one copy, and sets the pickup deadline from `reservation_expiry_days`.
+
+### Issue a reserved book at pickup
+
+```bash
+curl -X PATCH http://localhost:8000/api/reservations/5/issue/ \
+  -H "Authorization: Bearer <TOKEN>"
+```
+
+This creates the borrow transaction and changes the reservation to `BORROWED`.
 
 ### Cancel / decline a reservation
 
 ```bash
-curl -X POST http://localhost:8000/api/reservations/5/cancel/ \
+curl -X PATCH http://localhost:8000/api/reservations/5/cancel/ \
   -H "Authorization: Bearer <TOKEN>"
 ```
 
