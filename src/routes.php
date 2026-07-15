@@ -127,7 +127,9 @@ $router->add('GET', '/api/members/{id}/transactions/', fn (Request $request, arr
 $router->add('GET', '/api/reservations/', fn (Request $request, array $params): Response => $reservationController->index($request));
 $router->add('POST', '/api/reservations/', fn (Request $request, array $params): Response => $reservationController->store($request));
 $router->add('GET', '/api/reservations/{id}/', fn (Request $request, array $params): Response => $reservationController->show($request, $params));
+$router->add('PATCH', '/api/reservations/{id}/approve/', fn (Request $request, array $params): Response => $reservationController->approve($request, $params));
 $router->add('PATCH', '/api/reservations/{id}/cancel/', fn (Request $request, array $params): Response => $reservationController->cancel($request, $params));
+$router->add('PATCH', '/api/reservations/{id}/issue/', fn (Request $request, array $params): Response => $reservationController->issue($request, $params));
 $router->add('PATCH', '/api/reservations/{id}/fulfill/', fn (Request $request, array $params): Response => $reservationController->fulfill($request, $params));
 $router->add('GET', '/api/members/{id}/reservations/', fn (Request $request, array $params): Response => $reservationController->forMember($request, $params));
 $router->add('GET', '/api/fines/', fn (Request $request, array $params): Response => $fineController->index($request));

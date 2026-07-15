@@ -95,7 +95,7 @@ final class TransactionRepository
         return $statement->fetchAll();
     }
 
-    public function create(int $memberId, array $bookIds, DateTimeImmutable $dueDate): int
+    public function create(int $memberId, array $bookIds, DateTimeImmutable $dueDate, bool $decrementAvailability = true): int
     {
         $this->pdo->beginTransaction();
         try {
@@ -111,9 +111,11 @@ final class TransactionRepository
             );
             foreach ($bookIds as $bookId) {
                 $insertItem->execute([$transactionId, $bookId]);
-                $decrementBook->execute([$bookId]);
-                if ($decrementBook->rowCount() === 0) {
-                    throw new ValidationException('Book is no longer available');
+                if ($decrementAvailability) {
+                    $decrementBook->execute([$bookId]);
+                    if ($decrementBook->rowCount() === 0) {
+                        throw new ValidationException('Book is no longer available');
+                    }
                 }
             }
 

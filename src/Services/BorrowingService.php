@@ -25,7 +25,7 @@ final class BorrowingService
     /**
      * @param array<int> $bookIds
      */
-    public function issue(int $memberId, array $bookIds): int
+    public function issue(int $memberId, array $bookIds, bool $copiesAlreadyHeld = false): int
     {
         if ($this->members->find($memberId) === null) {
             throw new ValidationException('Member not found', 404);
@@ -39,7 +39,7 @@ final class BorrowingService
         if ($activeCount + count($bookIds) > $maxBooks) {
             $remainingSlots = max($maxBooks - $activeCount, 0);
             throw new ValidationException(
-                "Member cannot borrow more than {$maxBooks} books at once",
+                "Member cannot borrow more than {$maxBooks}. Return books first or contact librarian",
                 400,
                 ['activeBorrowCount' => $activeCount, 'maxBooks' => $maxBooks, 'remainingSlots' => $remainingSlots]
             );
@@ -50,13 +50,13 @@ final class BorrowingService
             if ($book === null) {
                 throw new ValidationException('Book not found', 404);
             }
-            if ((int) $book['available_copies'] < 1) {
+            if (!$copiesAlreadyHeld && (int) $book['available_copies'] < 1) {
                 throw new ValidationException("Book \"{$book['title']}\" is not available");
             }
         }
 
         $dueDate = (new DateTimeImmutable())->add(new DateInterval("P{$settings['borrowDays']}D"));
 
-        return $this->transactions->create($memberId, $bookIds, $dueDate);
+        return $this->transactions->create($memberId, $bookIds, $dueDate, !$copiesAlreadyHeld);
     }
 }
