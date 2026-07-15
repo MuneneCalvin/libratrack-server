@@ -29,6 +29,19 @@ final class ReservationEndpointTest extends TestCase
             'resv-test-member@libratrack.com', 'resv-test-second-member@libratrack.com',
             'resv-test-librarian@libratrack.com', 'resv-test-admin@libratrack.com',
         ];
+        $priorMemberIds = self::$pdo->prepare(
+            'SELECT members.id FROM members
+             JOIN users ON users.id = members.user_id
+             WHERE users.email IN (?, ?, ?, ?)'
+        );
+        $priorMemberIds->execute($priorEmails);
+        foreach ($priorMemberIds->fetchAll(\PDO::FETCH_COLUMN) as $priorMemberId) {
+            self::$pdo->prepare('DELETE FROM fines WHERE member_id = ?')->execute([(int) $priorMemberId]);
+            self::$pdo->prepare(
+                'DELETE FROM transaction_items WHERE transaction_id IN (SELECT id FROM transactions WHERE member_id = ?)'
+            )->execute([(int) $priorMemberId]);
+            self::$pdo->prepare('DELETE FROM transactions WHERE member_id = ?')->execute([(int) $priorMemberId]);
+        }
         self::$pdo->prepare(
             'DELETE FROM reservations WHERE member_id IN (SELECT id FROM members WHERE user_id IN (SELECT id FROM users WHERE email IN (?, ?, ?, ?)))'
         )->execute($priorEmails);
@@ -76,6 +89,27 @@ final class ReservationEndpointTest extends TestCase
         );
         $statement->execute([self::$categoryId, 'Resv Test Book', 'Author', 'ISBN-' . bin2hex(random_bytes(6))]);
         return (int) self::$pdo->lastInsertId();
+    }
+
+    private function freeAllBorrowSlots(): void
+    {
+        $items = self::$pdo->prepare(
+            'SELECT transaction_items.id, transaction_items.book_id
+             FROM transaction_items
+             JOIN transactions ON transactions.id = transaction_items.transaction_id
+             WHERE transactions.member_id = ? AND transaction_items.returned_at IS NULL'
+        );
+        $items->execute([self::$memberId]);
+
+        foreach ($items->fetchAll() as $item) {
+            self::$pdo->prepare('UPDATE transaction_items SET returned_at = NOW() WHERE id = ?')->execute([$item['id']]);
+            self::$pdo->prepare('UPDATE books SET available_copies = available_copies + 1 WHERE id = ?')->execute([$item['book_id']]);
+        }
+
+        self::$pdo->prepare(
+            "UPDATE transactions SET status = 'RETURNED', returned_at = NOW()
+             WHERE member_id = ? AND status != 'RETURNED'"
+        )->execute([self::$memberId]);
     }
 
     public function testListRequiresAdminOrLibrarian(): void
@@ -195,6 +229,7 @@ final class ReservationEndpointTest extends TestCase
 
     public function testAdminCanFulfillReservation(): void
     {
+        $this->freeAllBorrowSlots();
         $router = $this->router();
         $bookId = $this->createBook();
         $headers = ['authorization' => 'Bearer ' . self::$adminToken, 'content-type' => 'application/json'];
@@ -205,6 +240,78 @@ final class ReservationEndpointTest extends TestCase
 
         $this->assertSame(200, $response->statusCode);
         $this->assertSame('FULFILLED', $response->payload['data']['status']);
+    }
+
+    public function testFulfillReservationIssuesBorrowAndDecrementsAvailableCopies(): void
+    {
+        $this->freeAllBorrowSlots();
+        $router = $this->router();
+        $bookId = $this->createBook();
+        $headers = ['authorization' => 'Bearer ' . self::$librarianToken, 'content-type' => 'application/json'];
+        $create = $router->dispatch(new Request('POST', '/api/reservations/', [], $headers, [], [
+            'bookId' => $bookId,
+            'memberId' => self::$memberId,
+        ]));
+        $reservationId = $create->payload['data']['id'];
+
+        $response = $router->dispatch(new Request('PATCH', "/api/reservations/{$reservationId}/fulfill/", [], $headers, [], null));
+
+        $this->assertSame(200, $response->statusCode);
+        $this->assertSame('FULFILLED', $response->payload['data']['status']);
+
+        $transaction = self::$pdo->prepare(
+            "SELECT transactions.id, transactions.status
+             FROM transactions
+             JOIN transaction_items ON transaction_items.transaction_id = transactions.id
+             WHERE transactions.member_id = ? AND transaction_items.book_id = ? AND transaction_items.returned_at IS NULL
+             ORDER BY transactions.id DESC
+             LIMIT 1"
+        );
+        $transaction->execute([self::$memberId, $bookId]);
+        $row = $transaction->fetch();
+
+        $this->assertNotFalse($row);
+        $this->assertSame('ACTIVE', $row['status']);
+
+        $available = self::$pdo->prepare('SELECT available_copies FROM books WHERE id = ?');
+        $available->execute([$bookId]);
+        $this->assertSame(0, (int) $available->fetchColumn());
+    }
+
+    public function testFulfillReservationEnforcesMemberBorrowLimit(): void
+    {
+        $this->freeAllBorrowSlots();
+        $headers = ['authorization' => 'Bearer ' . self::$adminToken, 'content-type' => 'application/json'];
+        $router = $this->router();
+        $maxBooks = (int) self::$pdo->query(
+            "SELECT setting_value FROM settings WHERE setting_key = 'max_books_per_member'"
+        )->fetchColumn();
+
+        for ($i = 0; $i < $maxBooks; $i++) {
+            $bookId = $this->createBook();
+            $borrow = $router->dispatch(new Request('POST', '/api/transactions/', [], $headers, [], [
+                'memberId' => self::$memberId,
+                'bookIds' => [$bookId],
+            ]));
+            $this->assertSame(201, $borrow->statusCode);
+        }
+
+        $reservedBookId = $this->createBook();
+        $create = $router->dispatch(new Request('POST', '/api/reservations/', [], $headers, [], [
+            'bookId' => $reservedBookId,
+            'memberId' => self::$memberId,
+        ]));
+        $reservationId = $create->payload['data']['id'];
+
+        $response = $router->dispatch(new Request('PATCH', "/api/reservations/{$reservationId}/fulfill/", [], $headers, [], null));
+
+        $this->assertSame(400, $response->statusCode);
+        $this->assertSame("Member cannot borrow more than {$maxBooks} books at once", $response->payload['message']);
+        $this->assertSame(0, $response->payload['remainingSlots']);
+
+        $reservationStatus = self::$pdo->prepare('SELECT status FROM reservations WHERE id = ?');
+        $reservationStatus->execute([$reservationId]);
+        $this->assertSame('PENDING', $reservationStatus->fetchColumn());
     }
 
     public function testGetNonexistentReservationReturns404(): void

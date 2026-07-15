@@ -24,6 +24,7 @@ htmlcov/
 # Local docs/work notes
 /docs
 docs
+Final Report Project*.docx
 
 # IDEs
 .idea/

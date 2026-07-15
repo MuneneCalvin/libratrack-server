@@ -31,6 +31,7 @@ use LibraTrack\Repositories\SettingsRepository;
 use LibraTrack\Repositories\TransactionRepository;
 use LibraTrack\Repositories\UserRepository;
 use LibraTrack\Services\AuthService;
+use LibraTrack\Services\BorrowingService;
 use LibraTrack\Services\PasswordService;
 use LibraTrack\Services\TokenService;
 
@@ -56,6 +57,7 @@ $memberController = new MemberController($members, $users, $passwords, $authMidd
 $transactionRepository = new TransactionRepository($pdo);
 $fineRepository = new FineRepository($pdo);
 $fineController = new FineController($fineRepository, $members, $authMiddleware, $roleMiddleware);
+$borrowingService = new BorrowingService($transactionRepository, $members, $bookRepository, $settingsRepository);
 $notificationRepository = new NotificationRepository($pdo);
 $notificationController = new NotificationController($notificationRepository, $authMiddleware, $roleMiddleware);
 $reportRepository = new ReportRepository($pdo);
@@ -66,6 +68,7 @@ $transactionController = new TransactionController(
     $members,
     $bookRepository,
     $settingsRepository,
+    $borrowingService,
     $authMiddleware,
     $roleMiddleware
 );
@@ -75,6 +78,7 @@ $reservationController = new ReservationController(
     $members,
     $bookRepository,
     $settingsRepository,
+    $borrowingService,
     $authMiddleware,
     $roleMiddleware
 );

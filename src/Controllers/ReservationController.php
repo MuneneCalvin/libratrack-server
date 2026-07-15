@@ -17,6 +17,7 @@ use LibraTrack\Repositories\BookRepository;
 use LibraTrack\Repositories\MemberRepository;
 use LibraTrack\Repositories\ReservationRepository;
 use LibraTrack\Repositories\SettingsRepository;
+use LibraTrack\Services\BorrowingService;
 
 final class ReservationController
 {
@@ -25,6 +26,7 @@ final class ReservationController
         private readonly MemberRepository $members,
         private readonly BookRepository $books,
         private readonly SettingsRepository $settings,
+        private readonly BorrowingService $borrowing,
         private readonly AuthMiddleware $authMiddleware,
         private readonly RoleMiddleware $roleMiddleware
     ) {
@@ -115,10 +117,15 @@ final class ReservationController
         $this->roleMiddleware->authorize($payload, ['admin', 'librarian']);
 
         $id = (int) $params['id'];
-        if ($this->reservations->find($id) === null) {
+        $reservation = $this->reservations->find($id);
+        if ($reservation === null) {
             throw new ValidationException('Reservation not found', 404);
         }
+        if ($reservation['status'] !== 'PENDING') {
+            throw new ValidationException('Reservation is not pending');
+        }
 
+        $this->borrowing->issue((int) $reservation['member_id'], [(int) $reservation['book_id']]);
         $this->reservations->updateStatus($id, 'FULFILLED');
 
         return Response::success($this->toFrontend($this->reservations->find($id)));

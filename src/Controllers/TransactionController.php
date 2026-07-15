@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace LibraTrack\Controllers;
 
-use DateInterval;
 use DateTimeImmutable;
 use DateTimeInterface;
 use LibraTrack\Core\Pagination;
@@ -18,6 +17,7 @@ use LibraTrack\Repositories\FineRepository;
 use LibraTrack\Repositories\MemberRepository;
 use LibraTrack\Repositories\SettingsRepository;
 use LibraTrack\Repositories\TransactionRepository;
+use LibraTrack\Services\BorrowingService;
 
 final class TransactionController
 {
@@ -27,6 +27,7 @@ final class TransactionController
         private readonly MemberRepository $members,
         private readonly BookRepository $books,
         private readonly SettingsRepository $settings,
+        private readonly BorrowingService $borrowing,
         private readonly AuthMiddleware $authMiddleware,
         private readonly RoleMiddleware $roleMiddleware
     ) {
@@ -63,35 +64,7 @@ final class TransactionController
         $memberId = (int) $data['memberId'];
         $bookIds = array_map('intval', $data['bookIds']);
 
-        if ($this->members->find($memberId) === null) {
-            throw new ValidationException('Member not found', 404);
-        }
-
-        $settings = $this->settings->all();
-        $maxBooks = $settings['maxBooksPerMember'];
-        $activeCount = $this->members->countActiveBorrows($memberId);
-
-        if ($activeCount + count($bookIds) > $maxBooks) {
-            $remainingSlots = max($maxBooks - $activeCount, 0);
-            throw new ValidationException(
-                "Member cannot borrow more than {$maxBooks} books at once",
-                400,
-                ['activeBorrowCount' => $activeCount, 'maxBooks' => $maxBooks, 'remainingSlots' => $remainingSlots]
-            );
-        }
-
-        foreach ($bookIds as $bookId) {
-            $book = $this->books->find($bookId);
-            if ($book === null) {
-                throw new ValidationException('Book not found', 404);
-            }
-            if ((int) $book['available_copies'] < 1) {
-                throw new ValidationException("Book \"{$book['title']}\" is not available");
-            }
-        }
-
-        $dueDate = (new DateTimeImmutable())->add(new DateInterval("P{$settings['borrowDays']}D"));
-        $transactionId = $this->transactions->create($memberId, $bookIds, $dueDate);
+        $transactionId = $this->borrowing->issue($memberId, $bookIds);
 
         return Response::success($this->toFrontend($this->transactions->findWithItems($transactionId)), 201);
     }
