@@ -46,7 +46,7 @@ own account.
 ## Prerequisites
 
 - PHP 8.2 or later.
-- Composer (PHP package manager).
+- Composer (PHP-package-manager).
 - MySQL 8.0 or later.
 - A MySQL database and user with privileges on that database.
 
