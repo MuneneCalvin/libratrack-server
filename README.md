@@ -39,7 +39,6 @@ own account.
 | Authentication | Custom JWT with php-jwt and password_hash |
 | Config | Dotenv via vlucas/phpdotenv |
 | HTTP | PDO for database connection pooling |
-| Testing | PHPUnit 11 |
 
 ---
 
@@ -136,23 +135,6 @@ If serving from Apache/XAMPP, point the document root to the `public/` directory
 when possible. If you must serve from the project root, the `public/.htaccess`
 file rewrites `/api` routes to `public/index.php`.
 
-### 8. Docker Compose Alternative
-
-```bash
-docker compose up --build
-```
-
-Then run setup commands inside the PHP container:
-
-```bash
-docker compose exec web php database/migrate.php
-docker compose exec web php database/seed.php
-```
-
-The Compose file starts MySQL 8 and the PHP built-in server. It overrides the
-database connection to use the `db` service host, so local `.env` can stay
-focused on non-Docker development.
-
 ---
 
 ## Demo Credentials
@@ -206,11 +188,6 @@ database/
 ├── migrations/       PHP migration files
 ├── migrate.php       Migration runner
 └── seed.php          Demo data seeder
-
-tests/
-├── Core/             Core class unit tests
-├── Services/         Service unit tests
-└── Feature/          Endpoint integration tests
 ```
 
 The retired backend files were removed after the PHP API reached full contract
@@ -437,20 +414,6 @@ php scripts/import_openlibrary_books.php --limit=500 --copies=50 --skip-work-det
 | `--retries` | 5 | Retry attempts per page fetch |
 | `--skip-work-details` | off | Skip per-work synopsis/subject enrichment for a faster import |
 | `--insecure` | off | Disable SSL verification for local Windows PHP setups missing a CA bundle |
-
----
-
-## Running Tests
-
-```bash
-vendor/bin/phpunit
-```
-
-Run a focused file:
-
-```bash
-vendor/bin/phpunit tests/Feature/AuthEndpointTest.php
-```
 
 ---
 

@@ -498,22 +498,3 @@ All errors follow the same shape:
 | 404 | Resource not found |
 | 500 | Server error |
 
----
-
-## Running Tests
-
-```bash
-vendor/bin/phpunit
-```
-
-Run a specific test file:
-
-```bash
-vendor/bin/phpunit tests/Feature/AuthEndpointTest.php
-```
-
-Run a specific test method:
-
-```bash
-vendor/bin/phpunit --filter testLoginRouteReturnsFrontendEnvelopeShape
-```
