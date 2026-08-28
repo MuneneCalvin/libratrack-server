@@ -1,4 +1,4 @@
-# LibraTrack Backend — API Usage Guide
+# SomaHub Backend — API Usage Guide
 
 This guide covers how to run the API and interact with each endpoint.
 

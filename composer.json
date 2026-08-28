@@ -1,6 +1,6 @@
 {
   "name": "libratrack/plain-php-backend",
-  "description": "Plain PHP backend for LibraTrack",
+  "description": "Plain PHP backend for SomaHub",
   "type": "project",
   "require": {
     "php": "^8.2",

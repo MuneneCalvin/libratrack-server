@@ -1,6 +1,6 @@
-# LibraTrack - Backend (PHP)
+# SomaHub - Backend (PHP)
 
-LibraTrack Backend is a plain PHP REST API for a library management platform. It
+SomaHub Backend is a plain PHP REST API for a library management platform. It
 stores and serves the data used by the React frontend: users, roles, books,
 members, borrowing transactions, reservations, fines, notifications, reports, and
 library settings.

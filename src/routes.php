@@ -148,6 +148,7 @@ $router->add('GET', '/api/reports/fines/', fn (Request $request, array $params):
 $router->add('GET', '/api/reports/overdue/', fn (Request $request, array $params): Response => $reportController->overdue($request));
 $router->add('GET', '/api/reports/popular-books/', fn (Request $request, array $params): Response => $reportController->popularBooks($request));
 $router->add('GET', '/api/reports/members/', fn (Request $request, array $params): Response => $reportController->members($request));
+$router->add('GET', '/api/reports/active-borrows/', fn (Request $request, array $params): Response => $reportController->activeBorrows($request));
 $router->add('POST', '/api/reports/export/', fn (Request $request, array $params): Response => $reportController->export($request));
 
 return $router;

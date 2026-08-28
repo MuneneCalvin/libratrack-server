@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace LibraTrack\Controllers;
 
+use LibraTrack\Core\Pagination;
 use LibraTrack\Core\Request;
 use LibraTrack\Core\Response;
 use LibraTrack\Core\ValidationException;
@@ -62,6 +63,17 @@ final class ReportController
         return Response::success($this->reports->members());
     }
 
+    public function activeBorrows(Request $request): Response
+    {
+        $this->authorizeStaff($request);
+
+        $q = $request->query['q'] ?? $request->query['search'] ?? null;
+        $pagination = Pagination::fromRequest($request);
+        $result = $this->reports->activeBorrows($q, $pagination);
+
+        return Response::paginated($result['rows'], $pagination->meta($result['total']));
+    }
+
     public function export(Request $request): Response
     {
         $this->authorizeStaff($request);
@@ -77,8 +89,12 @@ final class ReportController
             throw new ValidationException('Unknown report');
         }
 
+        $header = $report === 'active-borrows'
+            ? ['book_title', 'book_author', 'book_isbn', 'member_name', 'membership_number', 'borrowed_at', 'due_date']
+            : ['metric', 'value'];
+
         $handle = fopen('php://temp', 'r+');
-        fputcsv($handle, ['metric', 'value'], ',', '"', '');
+        fputcsv($handle, $header, ',', '"', '');
         foreach ($rows as $row) {
             fputcsv($handle, $row, ',', '"', '');
         }
