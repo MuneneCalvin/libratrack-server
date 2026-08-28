@@ -101,6 +101,13 @@ final class BookController
             throw new ValidationException('Book not found', 404);
         }
 
+        if ($this->books->hasActiveBorrow($id)) {
+            throw new ValidationException(
+                'Cannot delete this book: it is currently borrowed by a member. It can be deleted once returned.',
+                409
+            );
+        }
+
         $this->books->delete($id);
 
         return new Response(['status' => 'success', 'data' => null], 204);

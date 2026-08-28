@@ -20,7 +20,7 @@ final class CategoryRepository
         $countSql = "SELECT COUNT(*) FROM (
             SELECT categories.id
             FROM categories
-            LEFT JOIN books ON books.category_id = categories.id
+            LEFT JOIN books ON books.category_id = categories.id AND books.deleted_at IS NULL
             GROUP BY categories.id
             {$having}
         ) AS counted";
@@ -28,7 +28,7 @@ final class CategoryRepository
 
         $sql = "SELECT categories.id, categories.name, COUNT(books.id) AS book_count
                 FROM categories
-                LEFT JOIN books ON books.category_id = categories.id
+                LEFT JOIN books ON books.category_id = categories.id AND books.deleted_at IS NULL
                 GROUP BY categories.id, categories.name
                 {$having}
                 ORDER BY categories.name ASC
@@ -46,7 +46,7 @@ final class CategoryRepository
         $statement = $this->pdo->prepare(
             'SELECT categories.id, categories.name, COUNT(books.id) AS book_count
              FROM categories
-             LEFT JOIN books ON books.category_id = categories.id
+             LEFT JOIN books ON books.category_id = categories.id AND books.deleted_at IS NULL
              WHERE categories.id = ?
              GROUP BY categories.id, categories.name'
         );
@@ -78,7 +78,7 @@ final class CategoryRepository
 
     public function countBooks(int $id): int
     {
-        $statement = $this->pdo->prepare('SELECT COUNT(*) FROM books WHERE category_id = ?');
+        $statement = $this->pdo->prepare('SELECT COUNT(*) FROM books WHERE category_id = ? AND deleted_at IS NULL');
         $statement->execute([$id]);
         return (int) $statement->fetchColumn();
     }

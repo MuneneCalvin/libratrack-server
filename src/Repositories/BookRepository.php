@@ -53,7 +53,7 @@ final class BookRepository
             'SELECT books.*, categories.name AS category_name
              FROM books
              JOIN categories ON categories.id = books.category_id
-             WHERE books.id = ?'
+             WHERE books.id = ? AND books.deleted_at IS NULL'
         );
         $statement->execute([$id]);
         $row = $statement->fetch();
@@ -62,7 +62,7 @@ final class BookRepository
 
     public function findByIsbn(string $isbn): ?array
     {
-        $statement = $this->pdo->prepare('SELECT id FROM books WHERE isbn = ?');
+        $statement = $this->pdo->prepare('SELECT id FROM books WHERE isbn = ? AND deleted_at IS NULL');
         $statement->execute([$isbn]);
         $row = $statement->fetch();
         return $row ?: null;
@@ -100,8 +100,17 @@ final class BookRepository
 
     public function delete(int $id): void
     {
-        $statement = $this->pdo->prepare('DELETE FROM books WHERE id = ?');
+        $statement = $this->pdo->prepare('UPDATE books SET deleted_at = NOW() WHERE id = ?');
         $statement->execute([$id]);
+    }
+
+    public function hasActiveBorrow(int $id): bool
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM transaction_items WHERE book_id = ? AND returned_at IS NULL'
+        );
+        $statement->execute([$id]);
+        return ((int) $statement->fetchColumn()) > 0;
     }
 
     private function toRow(array $data): array
@@ -174,7 +183,7 @@ final class BookRepository
 
     private function buildWhere(array $filters): array
     {
-        $clauses = [];
+        $clauses = ['deleted_at IS NULL'];
         $params = [];
 
         if (!empty($filters['q'])) {

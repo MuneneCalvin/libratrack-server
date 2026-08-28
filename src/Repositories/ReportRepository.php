@@ -14,8 +14,8 @@ final class ReportRepository
 
     public function summary(): array
     {
-        $totalBooks = (int) $this->pdo->query('SELECT COUNT(*) FROM books')->fetchColumn();
-        $copies = $this->pdo->query('SELECT COALESCE(SUM(total_copies), 0) AS total_copies, COALESCE(SUM(available_copies), 0) AS available_copies FROM books')->fetch();
+        $totalBooks = (int) $this->pdo->query('SELECT COUNT(*) FROM books WHERE deleted_at IS NULL')->fetchColumn();
+        $copies = $this->pdo->query('SELECT COALESCE(SUM(total_copies), 0) AS total_copies, COALESCE(SUM(available_copies), 0) AS available_copies FROM books WHERE deleted_at IS NULL')->fetch();
         $totalMembers = (int) $this->pdo->query('SELECT COUNT(*) FROM members')->fetchColumn();
         $activeBorrows = (int) $this->pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'ACTIVE'")->fetchColumn();
         $borrowedBooks = (int) $this->pdo->query(
@@ -56,7 +56,7 @@ final class ReportRepository
         $rows = $this->pdo->query(
             'SELECT categories.name, COUNT(books.id) AS count
              FROM categories
-             LEFT JOIN books ON books.category_id = categories.id
+             LEFT JOIN books ON books.category_id = categories.id AND books.deleted_at IS NULL
              GROUP BY categories.id, categories.name
              ORDER BY count DESC, categories.name ASC'
         )->fetchAll();
@@ -115,6 +115,7 @@ final class ReportRepository
             'SELECT books.id, books.title, books.author, COUNT(transaction_items.id) AS borrow_count
              FROM books
              LEFT JOIN transaction_items ON transaction_items.book_id = books.id
+             WHERE books.deleted_at IS NULL
              GROUP BY books.id, books.title, books.author
              ORDER BY borrow_count DESC, books.title ASC
              LIMIT 20'
@@ -159,7 +160,7 @@ final class ReportRepository
         $rows = $this->pdo->query(
             'SELECT categories.name, COUNT(books.id) AS count
              FROM categories
-             LEFT JOIN books ON books.category_id = categories.id
+             LEFT JOIN books ON books.category_id = categories.id AND books.deleted_at IS NULL
              GROUP BY categories.id, categories.name
              ORDER BY categories.name ASC'
         )->fetchAll();
