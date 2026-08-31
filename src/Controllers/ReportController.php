@@ -90,7 +90,7 @@ final class ReportController
         }
 
         $header = $report === 'active-borrows'
-            ? ['book_title', 'book_author', 'book_isbn', 'member_name', 'membership_number', 'borrowed_at', 'due_date']
+            ? ['book_title', 'book_author', 'book_isbn', 'member_name', 'membership_number', 'borrowed_at', 'due_date', 'status']
             : ['metric', 'value'];
 
         $handle = fopen('php://temp', 'r+');

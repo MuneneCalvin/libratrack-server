@@ -28,16 +28,16 @@ final class ReportRepository
         $total = (int) $countStatement->fetchColumn();
 
         $sql = "SELECT
-                transaction_items.id AS item_id,
+                transaction_items.id AS item_id, transaction_items.returned_at AS item_returned_at,
                 books.id AS book_id, books.title AS book_title, books.author AS book_author, books.isbn AS book_isbn, books.cover_url AS book_cover_url,
                 members.id AS member_id, members.full_name AS member_name, members.membership_number AS membership_number,
-                transactions.borrowed_at, transactions.due_date
+                transactions.status AS transaction_status, transactions.borrowed_at, transactions.due_date
             FROM transaction_items
             JOIN transactions ON transactions.id = transaction_items.transaction_id
             JOIN books ON books.id = transaction_items.book_id
             JOIN members ON members.id = transactions.member_id
             {$where}
-            ORDER BY transactions.due_date ASC
+            ORDER BY (transaction_items.returned_at IS NULL) DESC, transactions.due_date ASC
             LIMIT :limit OFFSET :offset";
         $statement = $this->pdo->prepare($sql);
         foreach ($params as $key => $value) {
@@ -57,15 +57,16 @@ final class ReportRepository
         [$where, $params] = $this->activeBorrowsWhere(null);
 
         $sql = "SELECT
+                transaction_items.returned_at AS item_returned_at,
                 books.title AS book_title, books.author AS book_author, books.isbn AS book_isbn,
                 members.full_name AS member_name, members.membership_number AS membership_number,
-                transactions.borrowed_at, transactions.due_date
+                transactions.status AS transaction_status, transactions.borrowed_at, transactions.due_date
             FROM transaction_items
             JOIN transactions ON transactions.id = transaction_items.transaction_id
             JOIN books ON books.id = transaction_items.book_id
             JOIN members ON members.id = transactions.member_id
             {$where}
-            ORDER BY transactions.due_date ASC";
+            ORDER BY (transaction_items.returned_at IS NULL) DESC, transactions.due_date ASC";
         $statement = $this->pdo->prepare($sql);
         $statement->execute($params);
 
@@ -77,7 +78,17 @@ final class ReportRepository
             $row['membership_number'],
             $row['borrowed_at'],
             $row['due_date'],
+            self::resolveStatus($row['item_returned_at'], $row['transaction_status']),
         ], $statement->fetchAll());
+    }
+
+    private static function resolveStatus(?string $itemReturnedAt, string $transactionStatus): string
+    {
+        if ($itemReturnedAt !== null) {
+            return 'RETURNED';
+        }
+
+        return $transactionStatus === 'OVERDUE' ? 'OVERDUE' : 'ACTIVE';
     }
 
     private static function toActiveBorrowRow(array $row): array
@@ -94,12 +105,13 @@ final class ReportRepository
             'membershipNumber' => $row['membership_number'],
             'borrowedAt' => (new \DateTimeImmutable($row['borrowed_at']))->format(\DateTimeInterface::ATOM),
             'dueDate' => (new \DateTimeImmutable($row['due_date']))->format(\DateTimeInterface::ATOM),
+            'status' => self::resolveStatus($row['item_returned_at'], $row['transaction_status']),
         ];
     }
 
     private function activeBorrowsWhere(?string $q): array
     {
-        $clauses = ["transaction_items.returned_at IS NULL", "transactions.status = 'ACTIVE'"];
+        $clauses = [];
         $params = [];
 
         if (!empty($q)) {
@@ -110,7 +122,7 @@ final class ReportRepository
             $params[':q_membership'] = $needle;
         }
 
-        return ['WHERE ' . implode(' AND ', $clauses), $params];
+        return [$clauses === [] ? '' : 'WHERE ' . implode(' AND ', $clauses), $params];
     }
 
     public function summary(): array
