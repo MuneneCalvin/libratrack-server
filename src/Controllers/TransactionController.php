@@ -161,12 +161,21 @@ final class TransactionController
             'borrowedAt' => (new DateTimeImmutable($row['borrowed_at']))->format(DateTimeInterface::ATOM),
             'dueDate' => (new DateTimeImmutable($row['due_date']))->format(DateTimeInterface::ATOM),
             'returnedAt' => $row['returned_at'] !== null ? (new DateTimeImmutable($row['returned_at']))->format(DateTimeInterface::ATOM) : null,
-            'status' => $row['status'],
+            'status' => $this->resolveStatus($row),
             'items' => array_map(static fn (array $item): array => [
                 'id' => (int) $item['item_id'],
                 'book' => BookRepository::toFrontend($item),
                 'returnedAt' => $item['item_returned_at'] !== null ? (new DateTimeImmutable($item['item_returned_at']))->format(DateTimeInterface::ATOM) : null,
             ], $row['items'] ?? []),
         ];
+    }
+
+    private function resolveStatus(array $row): string
+    {
+        if ($row['status'] === 'RETURNED') {
+            return 'RETURNED';
+        }
+
+        return new DateTimeImmutable($row['due_date']) < new DateTimeImmutable() ? 'OVERDUE' : 'ACTIVE';
     }
 }

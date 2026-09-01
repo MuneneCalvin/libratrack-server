@@ -84,7 +84,11 @@ final class TransactionRepository
     {
         $where = 'WHERE member_id = ?';
         $params = [$memberId];
-        if ($status !== null && $status !== '') {
+        if ($status === 'OVERDUE') {
+            $where .= " AND status = 'ACTIVE' AND due_date < NOW()";
+        } elseif ($status === 'ACTIVE') {
+            $where .= " AND status = 'ACTIVE' AND due_date >= NOW()";
+        } elseif ($status !== null && $status !== '') {
             $where .= ' AND status = ?';
             $params[] = $status;
         }
@@ -182,8 +186,14 @@ final class TransactionRepository
         $params = [];
 
         if (!empty($filters['status'])) {
-            $clauses[] = 'transactions.status = :status';
-            $params[':status'] = $filters['status'];
+            if ($filters['status'] === 'OVERDUE') {
+                $clauses[] = "transactions.status = 'ACTIVE' AND transactions.due_date < NOW()";
+            } elseif ($filters['status'] === 'ACTIVE') {
+                $clauses[] = "transactions.status = 'ACTIVE' AND transactions.due_date >= NOW()";
+            } else {
+                $clauses[] = 'transactions.status = :status';
+                $params[':status'] = $filters['status'];
+            }
         }
         if (!empty($filters['memberId'])) {
             $clauses[] = 'transactions.member_id = :member_id';

@@ -31,7 +31,7 @@ final class ReportRepository
                 transaction_items.id AS item_id, transaction_items.returned_at AS item_returned_at,
                 books.id AS book_id, books.title AS book_title, books.author AS book_author, books.isbn AS book_isbn, books.cover_url AS book_cover_url,
                 members.id AS member_id, members.full_name AS member_name, members.membership_number AS membership_number,
-                transactions.status AS transaction_status, transactions.borrowed_at, transactions.due_date
+                transactions.borrowed_at, transactions.due_date
             FROM transaction_items
             JOIN transactions ON transactions.id = transaction_items.transaction_id
             JOIN books ON books.id = transaction_items.book_id
@@ -60,7 +60,7 @@ final class ReportRepository
                 transaction_items.returned_at AS item_returned_at,
                 books.title AS book_title, books.author AS book_author, books.isbn AS book_isbn,
                 members.full_name AS member_name, members.membership_number AS membership_number,
-                transactions.status AS transaction_status, transactions.borrowed_at, transactions.due_date
+                transactions.borrowed_at, transactions.due_date
             FROM transaction_items
             JOIN transactions ON transactions.id = transaction_items.transaction_id
             JOIN books ON books.id = transaction_items.book_id
@@ -78,17 +78,17 @@ final class ReportRepository
             $row['membership_number'],
             $row['borrowed_at'],
             $row['due_date'],
-            self::resolveStatus($row['item_returned_at'], $row['transaction_status']),
+            self::resolveStatus($row['item_returned_at'], $row['due_date']),
         ], $statement->fetchAll());
     }
 
-    private static function resolveStatus(?string $itemReturnedAt, string $transactionStatus): string
+    private static function resolveStatus(?string $itemReturnedAt, string $dueDate): string
     {
         if ($itemReturnedAt !== null) {
             return 'RETURNED';
         }
 
-        return $transactionStatus === 'OVERDUE' ? 'OVERDUE' : 'ACTIVE';
+        return new \DateTimeImmutable($dueDate) < new \DateTimeImmutable() ? 'OVERDUE' : 'ACTIVE';
     }
 
     private static function toActiveBorrowRow(array $row): array
@@ -105,7 +105,7 @@ final class ReportRepository
             'membershipNumber' => $row['membership_number'],
             'borrowedAt' => (new \DateTimeImmutable($row['borrowed_at']))->format(\DateTimeInterface::ATOM),
             'dueDate' => (new \DateTimeImmutable($row['due_date']))->format(\DateTimeInterface::ATOM),
-            'status' => self::resolveStatus($row['item_returned_at'], $row['transaction_status']),
+            'status' => self::resolveStatus($row['item_returned_at'], $row['due_date']),
         ];
     }
 
@@ -136,7 +136,7 @@ final class ReportRepository
              JOIN transactions ON transactions.id = transaction_items.transaction_id
              WHERE transactions.status = 'ACTIVE' AND transaction_items.returned_at IS NULL"
         )->fetchColumn();
-        $overdueCount = (int) $this->pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'OVERDUE'")->fetchColumn();
+        $overdueCount = (int) $this->pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'ACTIVE' AND due_date < NOW()")->fetchColumn();
         $pendingReservations = (int) $this->pdo->query("SELECT COUNT(*) FROM reservations WHERE status = 'PENDING'")->fetchColumn();
         $unpaidFinesTotal = (float) $this->pdo->query("SELECT COALESCE(SUM(amount), 0) FROM fines WHERE status = 'unpaid'")->fetchColumn();
 
@@ -157,9 +157,12 @@ final class ReportRepository
 
     public function borrowing(): array
     {
+        $overdue = (int) $this->pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'ACTIVE' AND due_date < NOW()")->fetchColumn();
+        $active = (int) $this->pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'ACTIVE' AND due_date >= NOW()")->fetchColumn();
+
         return [
-            'active' => $this->countTransactions('ACTIVE'),
-            'overdue' => $this->countTransactions('OVERDUE'),
+            'active' => $active,
+            'overdue' => $overdue,
             'returned' => $this->countTransactions('RETURNED'),
         ];
     }
@@ -195,7 +198,7 @@ final class ReportRepository
             "SELECT transactions.id, transactions.member_id, transactions.due_date, members.full_name AS member_name
              FROM transactions
              JOIN members ON members.id = transactions.member_id
-             WHERE transactions.status = 'OVERDUE'
+             WHERE transactions.status = 'ACTIVE' AND transactions.due_date < NOW()
              ORDER BY transactions.due_date ASC"
         )->fetchAll();
 

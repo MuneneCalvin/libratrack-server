@@ -76,7 +76,7 @@ final class NotificationRepository
             "SELECT transactions.id, transactions.due_date, members.user_id
              FROM transactions
              JOIN members ON members.id = transactions.member_id
-             WHERE transactions.status = 'OVERDUE'
+             WHERE transactions.status = 'ACTIVE' AND transactions.due_date < NOW()
              ORDER BY transactions.due_date ASC"
         )->fetchAll();
 
