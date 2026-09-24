@@ -1,5 +1,8 @@
 # SomaHub - Backend (PHP)
 
+**Author:** Calvin Shawn
+**Date:** 2026-09-24
+
 SomaHub Backend is a plain PHP REST API for a library management platform. It
 stores and serves the data used by the React frontend: users, roles, books,
 members, borrowing transactions, reservations, fines, notifications, reports, and
@@ -79,6 +82,16 @@ JWT_ACCESS_TTL_MINUTES=15
 JWT_REFRESH_TTL_DAYS=7
 COOKIE_SECURE=false
 ```
+
+> **CORS:** the backend only accepts requests from origins listed in
+> `CORS_ALLOWED_ORIGINS` (comma-separated). Default covers the Vite dev
+> ports (`5173`, `5178`). Add any other frontend origin (a different port,
+> a tunnel URL) to this list or the browser will block API calls.
+
+> **Before deploying:** override the dev defaults `APP_DEBUG=true` and
+> `JWT_SECRET=dev-secret-key-change-in-production` in the production
+> `.env` — shipping either as-is leaks stack traces and forges valid
+> tokens.
 
 ### 3. Create the local MySQL database
 
@@ -386,6 +399,36 @@ Supported export reports: `borrowing`, `inventory`, `fines`, `members`,
 | `php database/migrate.php` | Create all PHP backend tables |
 | `php database/seed.php` | Create demo roles, accounts, and library settings |
 
+## Importing the Database Export
+
+This repo includes `libratrack_export.sql.gz`, a full dump (schema + data) of
+the demo database. Use it to skip migrations/seeding and get a ready-to-use
+database on another machine:
+
+1. Install PHP, Composer, and MySQL as described above, then `composer install`.
+2. Create an empty database and user:
+
+   ```sql
+   CREATE DATABASE libratrack CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   CREATE USER 'libratrack_user'@'localhost' IDENTIFIED BY 'libratrack_pass';
+   GRANT ALL PRIVILEGES ON libratrack.* TO 'libratrack_user'@'localhost';
+   ```
+
+3. Import the dump:
+
+   ```bash
+   gunzip < libratrack_export.sql.gz | mysql -u libratrack_user -p libratrack
+   ```
+
+4. Copy `.env.example` to `.env` and set `DB_NAME`/`DB_USER`/`DB_PASSWORD` to
+   match what you created in step 2.
+5. Skip `php database/migrate.php` and `php database/seed.php` — the dump
+   already contains the full schema and data. Only run migrations again if
+   you're starting from an empty database instead of an import.
+6. Start the server as usual: `php -S localhost:8000 -t public`.
+
+---
+
 ## Open Library Import
 
 ```bash
@@ -430,6 +473,15 @@ php scripts/import_openlibrary_books.php --limit=500 --copies=50 --skip-work-det
 | `DB_HOST` | `127.0.0.1` | MySQL host |
 | `DB_PORT` | `3306` | MySQL port |
 | `COOKIE_SECURE` | `false` | Set to `true` in production with HTTPS |
+
+---
+
+## Testing
+
+No automated test suite yet. Verification during development was manual,
+through the API directly and through the React frontend. Adding PHPUnit
+coverage for `Services`/`Repositories` is the main gap versus a production-
+grade backend.
 
 ---
 
